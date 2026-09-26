@@ -12,7 +12,7 @@ const icon = (name) => ({
   more: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
 })[name];
 
-const tree = [
+const defaultTree = [
   { id: 'it', name: 'فناوری اطلاعات', type: 'Vertical', status: 'active', children: [
     { id: 'digital', name: 'کالای دیجیتال', type: 'Category', status: 'active', children: [
       { id: 'mobile', name: 'موبایل و تبلت', type: 'SubCategory', status: 'active', children: [
@@ -31,6 +31,32 @@ const tree = [
     { id: 'appliance', name: 'لوازم خانگی', type: 'Category', status: 'active' },
   ]},
 ];
+
+const STORAGE_KEY = 'plaza-category-tree-v1';
+
+function loadTree() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : structuredClone(defaultTree);
+  } catch {
+    return structuredClone(defaultTree);
+  }
+}
+
+let tree = loadTree();
+
+function persistTree() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(tree));
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
 
 const openDecisions = [
   ['عمق SubCategory', 'محدودیت UI برای تعداد سطوح هنوز تعیین نشده است.'],
@@ -58,12 +84,36 @@ function findNode(id, nodes = tree, parents = []) {
   }
 }
 
+function getSiblings(parentId) {
+  if (!parentId) return tree;
+  const parent = findNode(parentId)?.node;
+  if (!parent.children) parent.children = [];
+  return parent.children;
+}
+
+function removeNode(id, nodes = tree) {
+  const index = nodes.findIndex(node => node.id === id);
+  if (index >= 0) {
+    nodes.splice(index, 1);
+    return true;
+  }
+  return nodes.some(node => node.children && removeNode(id, node.children));
+}
+
+function uniqueId(type) {
+  return `${type.toLowerCase()}-${Date.now().toString(36)}`;
+}
+
 function countNodes(nodes = tree) {
   return nodes.reduce((sum, node) => sum + 1 + countNodes(node.children || []), 0);
 }
 
 function countType(type, nodes = tree) {
   return nodes.reduce((sum, node) => sum + (node.type === type ? 1 : 0) + countType(type, node.children || []), 0);
+}
+
+function countActiveType(type, nodes = tree) {
+  return nodes.reduce((sum, node) => sum + (node.type === type && node.status !== 'inactive' ? 1 : 0) + countActiveType(type, node.children || []), 0);
 }
 
 function allowedChildren(type) {
@@ -86,8 +136,8 @@ function renderTree(nodes, depth = 0) {
       <button class="tree-row ${state.selected === node.id ? 'selected' : ''}" data-node="${node.id}" style="--depth:${depth}">
         <span class="toggle ${hasChildren ? '' : 'empty'}" data-toggle="${node.id}">${hasChildren ? icon('chevron') : ''}</span>
         <span class="type-dot ${node.type.toLowerCase()}"></span>
-        <span class="node-name"><b>${node.name}</b><small>${typeLabel(node.type)}</small></span>
-        <span class="node-status">فعال</span>
+        <span class="node-name"><b>${escapeHtml(node.name)}</b><small>${typeLabel(node.type)}</small></span>
+        <span class="node-status ${node.status === 'inactive' ? 'inactive' : ''}">${node.status === 'inactive' ? 'غیرفعال' : 'فعال'}</span>
       </button>
       ${childHtml ? `<div>${childHtml}</div>` : ''}
     </div>`;
@@ -100,23 +150,23 @@ function detailPanel() {
   const allowed = allowedChildren(node.type);
   return `<section class="card detail-card">
     <div class="detail-head">
-      <div><span class="type-pill ${node.type.toLowerCase()}">${node.type}</span><span class="active-pill"><i></i>فعال</span><h2>${node.name}</h2><p>شناسه: ${node.id}</p></div>
-      <button class="icon-button">${icon('more')}</button>
+      <div><span class="type-pill ${node.type.toLowerCase()}">${node.type}</span><span class="active-pill ${node.status === 'inactive' ? 'inactive' : ''}"><i></i>${node.status === 'inactive' ? 'غیرفعال' : 'فعال'}</span><h2>${escapeHtml(node.name)}</h2><p>شناسه: ${node.id}</p></div>
+      <div class="detail-actions"><button class="action-button" data-action="edit">ویرایش</button><button class="action-button danger" data-action="delete">حذف</button></div>
     </div>
-    <div class="path-box"><span>مسیر کامل</span><div>${path.map((item, index) => `<b class="${index === path.length - 1 ? 'current' : ''}">${item.name}</b>${index < path.length - 1 ? '<i>/</i>' : ''}`).join('')}</div></div>
+    <div class="path-box"><span>مسیر کامل</span><div>${path.map((item, index) => `<b class="${index === path.length - 1 ? 'current' : ''}">${escapeHtml(item.name)}</b>${index < path.length - 1 ? '<i>/</i>' : ''}`).join('')}</div></div>
     <div class="detail-grid">
       <div><span>نوع نود</span><b>${node.type}</b></div>
       <div><span>Parent</span><b>${parents.at(-1)?.name || 'ندارد'}</b></div>
-      <div><span>وضعیت</span><b>فعال</b></div>
+      <div><span>وضعیت</span><b>${node.status === 'inactive' ? 'غیرفعال' : 'فعال'}</b></div>
       <div><span>Child مجاز</span><b>${allowed.length ? allowed.join(' / ') : 'ندارد'}</b></div>
     </div>
-    ${node.type === 'LeafCat' ? `<div class="leaf-note">${icon('check')}<div><b>این نود برای اتصال Product معتبر است</b><p>فقط LeafCat فعال می‌تواند به‌عنوان دسته نهایی محصول انتخاب شود.</p></div></div>` : ''}
+    ${node.type === 'LeafCat' && node.status !== 'inactive' ? `<div class="leaf-note">${icon('check')}<div><b>این نود برای اتصال Product معتبر است</b><p>فقط LeafCat فعال می‌تواند به‌عنوان دسته نهایی محصول انتخاب شود.</p></div></div>` : ''}
     <div class="rule-list"><h3>قواعد این نود</h3>
       <div>${icon('check')}<span>${node.type === 'LeafCat' ? 'امکان افزودن Child ندارد.' : `فقط ${allowed.join(' یا ')} زیر این نود ساخته می‌شود.`}</span></div>
       <div>${icon('check')}<span>نام تکراری هم‌نوع زیر Parent یکسان پذیرفته نمی‌شود.</span></div>
       <div>${icon('check')}<span>ساخت نود باعث نمایش خودکار آن در سایت نمی‌شود.</span></div>
     </div>
-    ${allowed.length ? `<button class="secondary add-child" data-action="add-child">${icon('plus')} افزودن Child به این نود</button>` : ''}
+    ${allowed.length && node.status !== 'inactive' ? `<button class="secondary add-child" data-action="add-child">${icon('plus')} افزودن Child به این نود</button>` : ''}
   </section>`;
 }
 
@@ -126,13 +176,41 @@ function createModal() {
   return `<div class="backdrop" data-action="close"><section class="modal" onclick="event.stopPropagation()">
     <header><div><span>PRD-001</span><h2>ایجاد نود جدید</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
     <div class="modal-body">
-      <div class="parent-info"><small>Parent</small><b>${current?.name || 'بدون Parent — سطح ریشه'}</b><span>${current?.type || 'Vertical جدید'}</span></div>
+      <div class="parent-info"><small>Parent</small><b>${current ? escapeHtml(current.name) : 'بدون Parent — سطح ریشه'}</b><span>${current?.type || 'Vertical جدید'}</span></div>
       <label><span>نوع نود</span><select id="node-type">${types.map(type => `<option value="${type}">${type}</option>`).join('')}</select></label>
       <label><span>نام نود</span><input id="node-title" placeholder="مثلاً ساعت هوشمند" autocomplete="off" /></label>
-      <div class="preview"><small>پیش‌نمایش مسیر</small><p>${current ? `${findNode(current.id).parents.map(x => x.name).join(' / ')}${findNode(current.id).parents.length ? ' / ' : ''}${current.name} / ` : ''}<b id="preview-name">نام نود جدید</b></p></div>
-      <div class="form-note">${icon('info')} ثبت نهایی در این پروتوتایپ فقط داخل مرورگر شبیه‌سازی می‌شود.</div>
+      <div class="preview"><small>پیش‌نمایش مسیر</small><p>${current ? `${findNode(current.id).parents.map(x => escapeHtml(x.name)).join(' / ')}${findNode(current.id).parents.length ? ' / ' : ''}${escapeHtml(current.name)} / ` : ''}<b id="preview-name">نام نود جدید</b></p></div>
+      <p class="form-error" id="form-error"></p>
+      <div class="form-note">${icon('info')} تغییرات در همین مرورگر ذخیره می‌شوند و بعد از Refresh باقی می‌مانند.</div>
     </div>
     <footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="save">تأیید و ایجاد</button></footer>
+  </section></div>`;
+}
+
+function editModal() {
+  const { node, parents } = findNode(state.selected);
+  return `<div class="backdrop" data-action="close"><section class="modal" onclick="event.stopPropagation()">
+    <header><div><span>UPDATE NODE</span><h2>ویرایش نود</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
+    <div class="modal-body">
+      <div class="parent-info"><small>نوع و Parent قابل تغییر نیستند</small><b>${node.type}</b><span>${parents.at(-1) ? escapeHtml(parents.at(-1).name) : 'ریشه'}</span></div>
+      <label><span>نام نود</span><input id="node-title" value="${escapeHtml(node.name)}" autocomplete="off" /></label>
+      <label><span>وضعیت</span><select id="node-status"><option value="active" ${node.status !== 'inactive' ? 'selected' : ''}>فعال</option><option value="inactive" ${node.status === 'inactive' ? 'selected' : ''}>غیرفعال</option></select></label>
+      <p class="form-error" id="form-error"></p>
+      <div class="form-note">${icon('info')} غیرفعال‌کردن Parent دارای Child در این نمونه برای تست UI مجاز است.</div>
+    </div>
+    <footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="save-edit">ذخیره تغییرات</button></footer>
+  </section></div>`;
+}
+
+function deleteModal() {
+  const { node } = findNode(state.selected);
+  const hasChildren = Boolean(node.children?.length);
+  return `<div class="backdrop" data-action="close"><section class="modal confirm-modal" onclick="event.stopPropagation()">
+    <header><div><span>DELETE NODE</span><h2>حذف «${escapeHtml(node.name)}»</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
+    <div class="modal-body">
+      ${hasChildren ? `<div class="delete-warning blocked"><b>این نود قابل حذف نیست</b><p>نود دارای Child است. ابتدا Childهای آن را حذف کن.</p></div>` : `<div class="delete-warning"><b>این عملیات برگشت‌پذیر نیست</b><p>نود از CAT Tree و حافظه مرورگر حذف می‌شود.</p></div>`}
+    </div>
+    <footer><button class="ghost" data-action="close">انصراف</button>${hasChildren ? '' : '<button class="delete-button" data-action="confirm-delete">حذف نود</button>'}</footer>
   </section></div>`;
 }
 
@@ -162,7 +240,7 @@ function render() {
       <div class="content">
         <div class="page-head"><div><span class="eyebrow">CATEGORY · PRD-001</span><h1>ساختار دسته‌بندی</h1><p>ایجاد و مشاهده مسیر معتبر از Vertical تا LeafCat</p></div><button class="primary" data-action="add-root">${icon('plus')} نود جدید</button></div>
         <div class="stats">
-          <div><span>کل نودها</span><b>${countNodes()}</b></div><div><span>Vertical</span><b>${countType('Vertical')}</b></div><div><span>LeafCat فعال</span><b>${countType('LeafCat')}</b></div><div class="gap-stat"><span>تصمیم باز</span><b>۵</b></div>
+          <div><span>کل نودها</span><b>${countNodes()}</b></div><div><span>Vertical</span><b>${countType('Vertical')}</b></div><div><span>LeafCat فعال</span><b>${countActiveType('LeafCat')}</b></div><div class="gap-stat"><span>تصمیم باز</span><b>۵</b></div>
         </div>
         <div class="workspace">
           <section class="card tree-card">
@@ -173,10 +251,10 @@ function render() {
           </section>
           ${selected ? detailPanel() : ''}
         </div>
-        <section class="scope"><div>${icon('info')}<span><b>محدوده این مرحله</b><small>فقط ساخت و مشاهده CAT Tree؛ ویرایش، حذف، SEO، ترتیب و نمایش سایت در PRDهای بعدی هستند.</small></span></div><button data-action="decisions">مشاهده کمبودهای PRD</button></section>
+        <section class="scope"><div>${icon('info')}<span><b>ذخیره‌سازی Prototype</b><small>عملیات ایجاد، مشاهده، ویرایش و حذف در localStorage مرورگر ذخیره می‌شود؛ SEO و نمایش سایت در PRDهای بعدی هستند.</small></span></div><button data-action="decisions">مشاهده کمبودهای PRD</button></section>
       </div>
     </main>
-    ${state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'decisions' ? decisionsModal() : ''}
+    ${state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'decisions' ? decisionsModal() : ''}
     ${state.toast ? `<div class="toast">${icon('check')} ${state.toast}</div>` : ''}
   </div>`;
   bindEvents();
@@ -204,20 +282,76 @@ function bindEvents() {
     const action = button.dataset.action;
     if (action === 'add-root') state.modal = 'root';
     if (action === 'add-child') state.modal = 'create';
+    if (action === 'edit') state.modal = 'edit';
+    if (action === 'delete') state.modal = 'delete';
     if (action === 'decisions') state.modal = 'decisions';
     if (action === 'close') state.modal = null;
     if (action === 'save') {
       const title = document.querySelector('#node-title')?.value.trim();
-      if (!title) { document.querySelector('#node-title')?.classList.add('error'); return; }
+      const type = document.querySelector('#node-type')?.value;
+      const parentId = state.modal === 'root' ? null : state.selected;
+      const siblings = getSiblings(parentId);
+      if (!title) {
+        document.querySelector('#node-title')?.classList.add('error');
+        document.querySelector('#form-error').textContent = 'نام نود را وارد کن.';
+        return;
+      }
+      if (siblings.some(node => node.type === type && node.name.trim() === title)) {
+        document.querySelector('#node-title')?.classList.add('error');
+        document.querySelector('#form-error').textContent = 'نود هم‌نام و هم‌نوع زیر این Parent وجود دارد.';
+        return;
+      }
+      const newNode = { id: uniqueId(type), name: title, type, status: 'active' };
+      siblings.push(newNode);
+      if (parentId) state.expanded.add(parentId);
+      state.selected = newNode.id;
+      persistTree();
       state.modal = null;
-      showToast(`نود «${title}» با موفقیت شبیه‌سازی شد`);
+      showToast(`نود «${title}» ایجاد و ذخیره شد`);
+      return;
+    }
+    if (action === 'save-edit') {
+      const found = findNode(state.selected);
+      const title = document.querySelector('#node-title')?.value.trim();
+      const status = document.querySelector('#node-status')?.value;
+      const parentId = found.parents.at(-1)?.id || null;
+      const siblings = getSiblings(parentId);
+      if (!title) {
+        document.querySelector('#node-title')?.classList.add('error');
+        document.querySelector('#form-error').textContent = 'نام نود را وارد کن.';
+        return;
+      }
+      if (siblings.some(node => node.id !== found.node.id && node.type === found.node.type && node.name.trim() === title)) {
+        document.querySelector('#node-title')?.classList.add('error');
+        document.querySelector('#form-error').textContent = 'نود هم‌نام و هم‌نوع زیر این Parent وجود دارد.';
+        return;
+      }
+      found.node.name = title;
+      found.node.status = status;
+      persistTree();
+      state.modal = null;
+      showToast(`تغییرات «${title}» ذخیره شد`);
+      return;
+    }
+    if (action === 'confirm-delete') {
+      const found = findNode(state.selected);
+      const title = found.node.name;
+      const nextSelected = found.parents.at(-1)?.id || tree.find(node => node.id !== state.selected)?.id;
+      removeNode(state.selected);
+      persistTree();
+      state.selected = nextSelected || null;
+      state.modal = null;
+      showToast(`نود «${title}» حذف شد`);
       return;
     }
     render();
   }));
   const titleInput = document.querySelector('#node-title');
   if (titleInput) titleInput.addEventListener('input', event => {
-    document.querySelector('#preview-name').textContent = event.target.value || 'نام نود جدید';
+    const previewName = document.querySelector('#preview-name');
+    if (previewName) previewName.textContent = event.target.value || 'نام نود جدید';
+    const formError = document.querySelector('#form-error');
+    if (formError) formError.textContent = '';
     event.target.classList.remove('error');
   });
   const search = document.querySelector('#tree-search');
