@@ -1,4 +1,6 @@
 import './style.css';
+import { bindProduct, openProductGaps, productContent, productMeta } from './product.js';
+import { countActiveType, countNodes, countType, findNode, getSiblings, persistTree, removeNode, tree } from './tree.js';
 
 const icon = (name) => ({
   grid: '<svg viewBox="0 0 24 24"><path d="M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z"/></svg>',
@@ -10,44 +12,8 @@ const icon = (name) => ({
   info: '<svg viewBox="0 0 24 24"><path d="M11 10h2v8h-2v-8Zm0-4h2v2h-2V6Zm1-4a10 10 0 1 1 0 20 10 10 0 0 1 0-20Z"/></svg>',
   close: '<svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>',
   more: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  box: '<svg viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Zm8 2.2L7.2 7.5 12 4.8l4.8 2.7L12 9.7ZM6 9.3l5 2.8v6.2l-5-2.8V9.3Zm7 9v-6.2l5-2.8v6.2l-5 2.8Z"/></svg>',
 })[name];
-
-const defaultTree = [
-  { id: 'it', name: 'فناوری اطلاعات', type: 'Vertical', status: 'active', children: [
-    { id: 'digital', name: 'کالای دیجیتال', type: 'Category', status: 'active', children: [
-      { id: 'mobile', name: 'موبایل و تبلت', type: 'SubCategory', status: 'active', children: [
-        { id: 'phone', name: 'گوشی موبایل', type: 'LeafCat', status: 'active' },
-        { id: 'tablet', name: 'تبلت', type: 'LeafCat', status: 'active' },
-      ]},
-      { id: 'computer', name: 'لپ‌تاپ و کامپیوتر', type: 'SubCategory', status: 'active', children: [
-        { id: 'laptop', name: 'لپ‌تاپ', type: 'LeafCat', status: 'active' },
-      ]},
-    ]},
-    { id: 'network', name: 'تجهیزات شبکه', type: 'Category', status: 'active', children: [
-      { id: 'router', name: 'مودم و روتر', type: 'LeafCat', status: 'active' },
-    ]},
-  ]},
-  { id: 'home', name: 'خانه و آشپزخانه', type: 'Vertical', status: 'active', children: [
-    { id: 'appliance', name: 'لوازم خانگی', type: 'Category', status: 'active' },
-  ]},
-];
-
-const STORAGE_KEY = 'plaza-category-tree-v1';
-
-function loadTree() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : structuredClone(defaultTree);
-  } catch {
-    return structuredClone(defaultTree);
-  }
-}
-
-let tree = loadTree();
-
-function persistTree() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tree));
-}
 
 function escapeHtml(value) {
   return String(value)
@@ -67,6 +33,7 @@ const openDecisions = [
 ];
 
 const state = {
+  screen: 'category',
   selected: 'phone',
   expanded: new Set(['it', 'digital', 'mobile', 'computer']),
   modal: null,
@@ -74,46 +41,8 @@ const state = {
   search: '',
 };
 
-function findNode(id, nodes = tree, parents = []) {
-  for (const node of nodes) {
-    if (node.id === id) return { node, parents };
-    if (node.children) {
-      const found = findNode(id, node.children, [...parents, node]);
-      if (found) return found;
-    }
-  }
-}
-
-function getSiblings(parentId) {
-  if (!parentId) return tree;
-  const parent = findNode(parentId)?.node;
-  if (!parent.children) parent.children = [];
-  return parent.children;
-}
-
-function removeNode(id, nodes = tree) {
-  const index = nodes.findIndex(node => node.id === id);
-  if (index >= 0) {
-    nodes.splice(index, 1);
-    return true;
-  }
-  return nodes.some(node => node.children && removeNode(id, node.children));
-}
-
 function uniqueId(type) {
   return `${type.toLowerCase()}-${Date.now().toString(36)}`;
-}
-
-function countNodes(nodes = tree) {
-  return nodes.reduce((sum, node) => sum + 1 + countNodes(node.children || []), 0);
-}
-
-function countType(type, nodes = tree) {
-  return nodes.reduce((sum, node) => sum + (node.type === type ? 1 : 0) + countType(type, node.children || []), 0);
-}
-
-function countActiveType(type, nodes = tree) {
-  return nodes.reduce((sum, node) => sum + (node.type === type && node.status !== 'inactive' ? 1 : 0) + countActiveType(type, node.children || []), 0);
 }
 
 function allowedChildren(type) {
@@ -224,21 +153,23 @@ function decisionsModal() {
 
 function render() {
   const selected = findNode(state.selected)?.node;
+  const product = state.screen === 'product';
+  const meta = product ? productMeta() : null;
   document.querySelector('#app').innerHTML = `<div class="layout">
     <aside class="sidebar">
       <div class="logo"><i><span></span><span></span><span></span></i><div><b>plaza</b><small>PRD PROTOTYPES</small></div></div>
       <nav>
-        <button><span>${icon('grid')}</span><b>نمای کلی</b></button>
-        <button class="active"><span>${icon('tree')}</span><b>دسته‌بندی</b><em>PRD-001</em></button>
+        <button class="${product ? '' : 'active'}" data-screen="category"><span>${icon('tree')}</span><b>دسته‌بندی</b><em>PRD-001</em></button>
+        <button class="${product ? 'active' : ''}" data-screen="product"><span>${icon('box')}</span><b>محصول</b><em>${product ? meta.code : 'Product'}</em></button>
       </nav>
-      <div class="prd-box"><small>PRD فعال</small><b>ایجاد CAT Tree</b><span>نسخه ۰.۲ · P0</span><div><i></i>Draft</div></div>
-      <button class="gap-button" data-action="decisions"><span>۵</span><div><b>تصمیم باز</b><small>نیازمند تعیین تکلیف</small></div></button>
+      <div class="prd-box"><small>PRD فعال</small><b>${product ? meta.name : 'ایجاد CAT Tree'}</b><span>${product ? meta.code : 'نسخه ۰.۲'} · P0</span><div><i></i>Draft</div></div>
+      <button class="gap-button" data-action="decisions"><span>${product ? meta.gaps : 5}</span><div><b>تصمیم باز</b><small>نیازمند تعیین تکلیف</small></div></button>
       <div class="profile"><span>م‌ف</span><div><b>مهدی فرحزادی</b><small>مالک محصول</small></div></div>
     </aside>
     <main>
-      <header class="topbar"><div><b>Plaza Digital</b><i>/</i><span>Category</span><i>/</i><strong>PRD-001</strong></div><button class="avatar">م‌ف</button></header>
+      <header class="topbar"><div><b>Plaza Digital</b><i>/</i><span>${product ? 'Product' : 'Category'}</span><i>/</i><strong>${product ? meta.code : 'PRD-001'}</strong></div><button class="avatar">م‌ف</button></header>
       <div class="content">
-        <div class="page-head"><div><span class="eyebrow">CATEGORY · PRD-001</span><h1>ساختار دسته‌بندی</h1><p>ایجاد و مشاهده مسیر معتبر از Vertical تا LeafCat</p></div><button class="primary" data-action="add-root">${icon('plus')} نود جدید</button></div>
+        ${product ? productContent(icon) : `<div class="page-head"><div><span class="eyebrow">CATEGORY · PRD-001</span><h1>ساختار دسته‌بندی</h1><p>ایجاد و مشاهده مسیر معتبر از Vertical تا LeafCat</p></div><button class="primary" data-action="add-root">${icon('plus')} نود جدید</button></div>
         <div class="stats">
           <div><span>کل نودها</span><b>${countNodes()}</b></div><div><span>Vertical</span><b>${countType('Vertical')}</b></div><div><span>LeafCat فعال</span><b>${countActiveType('LeafCat')}</b></div><div class="gap-stat"><span>تصمیم باز</span><b>۵</b></div>
         </div>
@@ -251,11 +182,11 @@ function render() {
           </section>
           ${selected ? detailPanel() : ''}
         </div>
-        <section class="scope"><div>${icon('info')}<span><b>ذخیره‌سازی Prototype</b><small>عملیات ایجاد، مشاهده، ویرایش و حذف در localStorage مرورگر ذخیره می‌شود؛ SEO و نمایش سایت در PRDهای بعدی هستند.</small></span></div><button data-action="decisions">مشاهده کمبودهای PRD</button></section>
+        <section class="scope"><div>${icon('info')}<span><b>ذخیره‌سازی Prototype</b><small>عملیات ایجاد، مشاهده، ویرایش و حذف در localStorage مرورگر ذخیره می‌شود؛ SEO و نمایش سایت در PRDهای بعدی هستند.</small></span></div><button data-action="decisions">مشاهده کمبودهای PRD</button></section>`}
       </div>
     </main>
-    ${state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'decisions' ? decisionsModal() : ''}
-    ${state.toast ? `<div class="toast">${icon('check')} ${state.toast}</div>` : ''}
+    ${product ? '' : (state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'decisions' ? decisionsModal() : '')}
+    ${!product && state.toast ? `<div class="toast">${icon('check')} ${state.toast}</div>` : ''}
   </div>`;
   bindEvents();
 }
@@ -267,6 +198,19 @@ function showToast(text) {
 }
 
 function bindEvents() {
+  document.querySelectorAll('[data-screen]').forEach((button) => button.addEventListener('click', () => {
+    state.screen = button.dataset.screen;
+    state.modal = null;
+    render();
+  }));
+  if (state.screen === 'product') {
+    bindProduct(render);
+    document.querySelector('.gap-button')?.addEventListener('click', () => {
+      openProductGaps();
+      render();
+    });
+    return;
+  }
   document.querySelectorAll('[data-node]').forEach(button => button.addEventListener('click', event => {
     if (event.target.closest('[data-toggle]')) return;
     state.selected = button.dataset.node;
