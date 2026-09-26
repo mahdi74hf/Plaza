@@ -73,7 +73,6 @@ const tabs = [
   ['brands', 'برند', 'PRD-046'],
   ['variants', 'واریانت', 'PRD-047'],
   ['products', 'محصول', 'PRD-032'],
-  ['shop', 'فروشگاه', 'PRD-054'],
 ];
 
 const typeLabels = { text: 'متن', number: 'عدد', boolean: 'بله/خیر', single: 'انتخاب تکی', multi: 'انتخاب چندتایی' };
@@ -86,7 +85,7 @@ export function productMeta() {
   const current = tabs.find(([id]) => id === ui.tab);
   return {
     code: current?.[2] || 'PRD-032',
-    name: current?.[0] === 'shop' ? 'کشف و نمایش محصول' : current?.[1] || 'محصول',
+    name: current?.[1] || 'محصول',
     crumb: 'Product',
     gaps: decisions.length,
   };
@@ -99,15 +98,15 @@ export function productContent(icon) {
       ${headAction(icon)}
     </div>
     <div class="prd-tabs">${tabs.map(([id, label, code]) => `<button type="button" data-tab="${id}" class="${ui.tab === id ? 'active' : ''}">${label}<small>${code}</small></button>`).join('')}</div>
-    ${ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'products' ? productsView() : shopView()}
-    <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>ویژگی LeafCat، برند، واریانت، محصول و فروشگاه در localStorage همین مرورگر می‌مانند.</small></span></div></section>
+    ${ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : productsView()}
+    <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>ویژگی LeafCat، برند، واریانت و محصول در localStorage همین مرورگر می‌مانند.</small></span></div></section>
     ${modalHtml()}
     ${ui.toast ? `<div class="toast">${icon('check')} ${escape(ui.toast)}</div>` : ''}
   </div>`;
 }
 
 function heading() {
-  return { schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ', shop: 'فروشگاه' }[ui.tab];
+  return { schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ' }[ui.tab] || 'محصولات کاتالوگ';
 }
 
 function subhead() {
@@ -116,7 +115,6 @@ function subhead() {
     brands: 'ایجاد برند، محدودکردن آن به LeafCat و جلوگیری از غیرفعال‌سازی برند در حال استفاده',
     variants: 'حداکثر دو محور Variant از ویژگی‌های انتخابی همان LeafCat',
     products: 'اتصال به یک LeafCat فعال، ذخیره Draft و انتشار پس از تأیید',
-    shop: 'جست‌وجو، فیلتر و فهرست محصولات منتشرشده',
   }[ui.tab];
 }
 
@@ -440,14 +438,14 @@ function modalHtml() {
   if (ui.modal === 'seo') return seoModal();
   if (ui.modal === 'links') return linksModal();
   if (ui.modal === 'reject') return rejectModal();
-  if (ui.modal === 'decisions') return `<div class="backdrop" data-action="close"><section class="modal decisions" onclick="event.stopPropagation()"><header><div><span>GAPS</span><h2>تصمیم‌های باز Product</h2></div><button class="icon-button" data-action="close">×</button></header><div class="decision-list">${decisions.map(([title, text], index) => `<article><em>۰${index + 1}</em><div><b>${title}</b><p>${text}</p></div><span>باز</span></article>`).join('')}</div><footer><button class="primary" data-action="close">متوجه شدم</button></footer></section></div>`;
+  if (ui.modal === 'decisions') return `<div class="backdrop"><section class="modal decisions" onclick="event.stopPropagation()"><header><div><span>GAPS</span><h2>تصمیم‌های باز Product</h2></div><button class="icon-button" data-action="close">×</button></header><div class="decision-list">${decisions.map(([title, text], index) => `<article><em>۰${index + 1}</em><div><b>${title}</b><p>${text}</p></div><span>باز</span></article>`).join('')}</div><footer><button class="primary" data-action="close">متوجه شدم</button></footer></section></div>`;
   return '';
 }
 
 function brandModal() {
   const brand = ui.editingId ? brandById(ui.editingId) : null;
   const leaves = activeLeaves();
-  return `<div class="backdrop" data-action="close"><section class="modal wide" onclick="event.stopPropagation()">
+  return `<div class="backdrop"><section class="modal wide" onclick="event.stopPropagation()">
     <header><div><span>PRD-046</span><h2>${brand ? 'ویرایش برند' : 'برند جدید'}</h2></div><button class="icon-button" data-action="close">×</button></header>
     <div class="modal-body">
       <label><span>نام فارسی</span><input id="brand-name" value="${escape(brand?.name || '')}" /></label>
@@ -478,9 +476,11 @@ function attributeFields(leafId, item) {
 function attributeModal() {
   const existing = schemaOf(ui.leafId).find((field) => field.key === ui.editingAttr);
   const used = existing ? attributeInUse(ui.leafId, existing.key) : false;
-  return `<div class="backdrop" data-action="close"><section class="modal wide" onclick="event.stopPropagation()">
+  const leaves = activeLeaves();
+  return `<div class="backdrop"><section class="modal wide" onclick="event.stopPropagation()">
     <header><div><span>PRD-044</span><h2>${existing ? 'ویرایش ویژگی' : 'ویژگی جدید'}</h2></div><button type="button" class="icon-button" data-action="close">×</button></header>
     <div class="modal-body">
+      <label><span>LeafCat</span><select id="attr-leaf" data-origin="${escape(ui.leafId)}">${leaves.map(({ node }) => `<option value="${node.id}" ${node.id === ui.leafId ? 'selected' : ''}>${escape(pathLabel(node.id))}</option>`).join('')}</select></label>
       <label><span>نام ویژگی</span><input id="attr-label" value="${escape(existing?.label || '')}" placeholder="مثلاً حافظه رم" /></label>
       <label><span>نوع داده</span><select id="attr-type" ${used ? 'disabled' : ''}>${Object.entries(typeLabels).map(([id, label]) => `<option value="${id}" ${existing?.dataType === id ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
       <label><span>واحد، فقط برای عدد</span><input id="attr-unit" value="${escape(existing?.unit || '')}" placeholder="مثلاً گیگابایت" /></label>
@@ -498,7 +498,7 @@ function attributeModal() {
 function productModal() {
   const item = ui.editingId ? productById(ui.editingId) : null;
   const leafId = item?.leafId || activeLeaves()[0]?.node.id || '';
-  return `<div class="backdrop" data-action="close"><section class="modal wide" onclick="event.stopPropagation()">
+  return `<div class="backdrop"><section class="modal wide" onclick="event.stopPropagation()">
     <header><div><span>PRD-032</span><h2>${item ? 'ویرایش محصول' : 'محصول جدید'}</h2></div><button class="icon-button" data-action="close">×</button></header>
     <div class="modal-body">
       <label><span>عنوان فارسی</span><input id="product-title" value="${escape(item?.title || '')}" /></label>
@@ -524,11 +524,11 @@ function skuModal() {
   const selected = ui.skuPick || Object.fromEntries(axes.map((axis) => [axis.key, axis.options.slice(0, 1)]));
   ui.skuPick = selected;
   const combos = combinations(axes, selected);
-  return `<div class="backdrop" data-action="close"><section class="modal wide" onclick="event.stopPropagation()">
+  return `<div class="backdrop"><section class="modal wide" onclick="event.stopPropagation()">
     <header><div><span>PRD-047</span><h2>انتخاب ترکیب‌های قابل فروش</h2></div><button class="icon-button" data-action="close">×</button></header>
     <div class="modal-body">
       ${axes.map((axis) => `<div class="option-box"><span>${escape(axis.label)}</span><div>${axis.options.map((option) => `<label class="chip-button"><input type="checkbox" data-sku-value="${axis.key}" value="${escape(option)}" ${selected[axis.key]?.includes(option) ? 'checked' : ''}/>${escape(option)}</label>`).join('')}</div></div>`).join('')}
-      <div class="schema-list">${combos.map((combo) => `<label class="combo-row"><input type="checkbox" data-combo="${escape(JSON.stringify(combo))}" checked/><span>${Object.values(combo).join(' · ')}</span></label>`).join('') || '<p>حداقل یک مقدار برای هر محور انتخاب کن.</p>'}</div>
+      <div class="schema-list" id="sku-combos">${combos.map((combo) => `<label class="combo-row"><input type="checkbox" data-combo="${escape(JSON.stringify(combo))}" checked/><span>${Object.values(combo).join(' · ')}</span></label>`).join('') || '<p>حداقل یک مقدار برای هر محور انتخاب کن.</p>'}</div>
       <p class="form-error" id="form-error"></p>
     </div>
     <footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="confirm-skus">تأیید و ایجاد</button></footer>
@@ -537,7 +537,7 @@ function skuModal() {
 
 function seoModal() {
   const item = productById(ui.productId);
-  return `<div class="backdrop" data-action="close"><section class="modal" onclick="event.stopPropagation()">
+  return `<div class="backdrop"><section class="modal" onclick="event.stopPropagation()">
     <header><div><span>PRD-050</span><h2>SEO محصول</h2></div><button class="icon-button" data-action="close">×</button></header>
     <div class="modal-body">
       <label><span>Slug</span><input id="seo-slug" value="${escape(item.seo.slug)}" /></label>
@@ -555,7 +555,7 @@ function seoModal() {
 function linksModal() {
   const item = productById(ui.productId);
   const others = catalog.products.filter((entry) => entry.id !== item.id);
-  return `<div class="backdrop" data-action="close"><section class="modal wide" onclick="event.stopPropagation()">
+  return `<div class="backdrop"><section class="modal wide" onclick="event.stopPropagation()">
     <header><div><span>PRD-049</span><h2>محصولات مرتبط</h2></div><button class="icon-button" data-action="close">×</button></header>
     <div class="modal-body">
       <label><span>محصول مقصد</span><select id="link-target">${others.map((entry) => `<option value="${entry.id}">${escape(entry.title)}</option>`).join('')}</select></label>
@@ -568,7 +568,7 @@ function linksModal() {
 }
 
 function rejectModal() {
-  return `<div class="backdrop" data-action="close"><section class="modal" onclick="event.stopPropagation()">
+  return `<div class="backdrop"><section class="modal" onclick="event.stopPropagation()">
     <header><div><span>PRD-051</span><h2>رد نظر</h2></div><button class="icon-button" data-action="close">×</button></header>
     <div class="modal-body"><label><span>دلیل رد</span><textarea id="reject-reason"></textarea></label><p class="form-error" id="form-error"></p></div>
     <footer><button class="ghost" data-action="close">انصراف</button><button class="delete-button" data-action="confirm-reject">ثبت رد</button></footer>
@@ -576,7 +576,7 @@ function rejectModal() {
 }
 
 function confirmModal(title, text, action, label) {
-  return `<div class="backdrop" data-action="close"><section class="modal confirm-modal" onclick="event.stopPropagation()"><header><div><span>CONFIRM</span><h2>${title}</h2></div><button class="icon-button" data-action="close">×</button></header><div class="modal-body"><div class="delete-warning"><b>${title}</b><p>${text}</p></div></div><footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="${action}">${label}</button></footer></section></div>`;
+  return `<div class="backdrop"><section class="modal confirm-modal" onclick="event.stopPropagation()"><header><div><span>CONFIRM</span><h2>${title}</h2></div><button class="icon-button" data-action="close">×</button></header><div class="modal-body"><div class="delete-warning"><b>${title}</b><p>${text}</p></div></div><footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="${action}">${label}</button></footer></section></div>`;
 }
 
 function auditBox() {
@@ -640,6 +640,13 @@ export function bindProduct(rerender) {
 }
 
 function onClick(event, rerender) {
+  if (event.target.classList?.contains('backdrop')) {
+    ui.modal = null;
+    rerender();
+    return;
+  }
+  const modal = event.target.closest('.modal');
+  if (ui.modal && !modal) return;
   const tab = event.target.closest('[data-tab]');
   if (tab) { ui.tab = tab.dataset.tab; ui.modal = null; rerender(); return; }
   const brand = event.target.closest('[data-brand]');
@@ -667,7 +674,9 @@ function onClick(event, rerender) {
   if (clear) { clearChip(clear.dataset.clear); rerender(); return; }
   const axis = event.target.closest('[data-axis]');
   if (axis) { pickAxis(axis.dataset.axis, axis.dataset.value, rerender); return; }
-  const action = event.target.closest('[data-action]')?.dataset.action;
+  const actionHost = event.target.closest('[data-action]');
+  if (modal && actionHost && !modal.contains(actionHost)) return;
+  const action = actionHost?.dataset.action;
   if (!action) return;
   if (action === 'close') { ui.modal = null; rerender(); return; }
   if (action === 'new-brand') { ui.editingId = null; ui.modal = 'brand'; rerender(); return; }
@@ -713,6 +722,7 @@ function onClick(event, rerender) {
 function onChange(event, rerender) {
   const target = event.target;
   if (target.dataset.field === 'customer') { ui.customerId = target.value; rerender(); return; }
+  if (target.id === 'attr-leaf' || target.id === 'attr-type') return;
   if (target.id === 'product-leaf') {
     const brandSelect = document.querySelector('#product-brand');
     const current = brandSelect?.value || '';
@@ -753,7 +763,7 @@ function onChange(event, rerender) {
     const values = new Set(ui.skuPick?.[key] || []);
     target.checked ? values.add(target.value) : values.delete(target.value);
     ui.skuPick = { ...ui.skuPick, [key]: [...values] };
-    rerender();
+    refreshSkuCombos();
     return;
   }
   if (target.dataset.axis) return;
@@ -798,8 +808,19 @@ function toggleBrand(rerender) {
   toast('وضعیت برند ذخیره شد', rerender);
 }
 
+function refreshSkuCombos() {
+  const item = productById(ui.productId);
+  const list = document.querySelector('#sku-combos');
+  if (!item || !list) return;
+  const combos = combinations(variantAxes(item.leafId), ui.skuPick || {});
+  list.innerHTML = combos.map((combo) => `<label class="combo-row"><input type="checkbox" data-combo="${escape(JSON.stringify(combo))}" checked/><span>${Object.values(combo).join(' · ')}</span></label>`).join('') || '<p>حداقل یک مقدار برای هر محور انتخاب کن.</p>';
+}
+
 function saveAttribute(rerender) {
-  if (!ui.leafId) return fail('اول یک LeafCat انتخاب کن.');
+  const leafSelect = document.querySelector('#attr-leaf');
+  const leafId = leafSelect?.value || ui.leafId;
+  const origin = leafSelect?.dataset.origin || ui.leafId;
+  if (!leafId) return fail('اول یک LeafCat انتخاب کن.');
   const label = document.querySelector('#attr-label')?.value.trim();
   const dataType = document.querySelector('#attr-type')?.value || 'text';
   const unit = dataType === 'number' ? (document.querySelector('#attr-unit')?.value.trim() || '') : '';
@@ -810,20 +831,32 @@ function saveAttribute(rerender) {
   const filterable = !!document.querySelector('#attr-filterable')?.checked;
   const variant = !!document.querySelector('#attr-variant')?.checked;
   if (!label) return fail('نام ویژگی لازم است.');
-  const schema = catalog.schemas[ui.leafId] || (catalog.schemas[ui.leafId] = []);
-  if (schema.some((field) => field.key !== ui.editingAttr && normalize(field.label) === normalize(label))) return fail('ویژگی با این نام در همین LeafCat وجود دارد.');
   if (['single', 'multi'].includes(dataType) && !options.length) return fail('برای ویژگی انتخابی حداقل یک مقدار مجاز لازم است.');
   if (variant && !['single', 'multi'].includes(dataType)) return fail('محور Variant فقط برای ویژگی انتخابی مجاز است.');
+  const schema = catalog.schemas[leafId] || (catalog.schemas[leafId] = []);
+  if (schema.some((field) => field.key !== ui.editingAttr && normalize(field.label) === normalize(label))) return fail('ویژگی با این نام در همین LeafCat وجود دارد.');
   if (variant && schema.filter((field) => field.variant && field.key !== ui.editingAttr).length >= 2) return fail('هر LeafCat حداکثر دو محور Variant دارد.');
+  let moved = null;
+  if (ui.editingAttr && origin !== leafId) {
+    const originSchema = catalog.schemas[origin] || [];
+    const index = originSchema.findIndex((item) => item.key === ui.editingAttr);
+    moved = index >= 0 ? originSchema[index] : null;
+    if (!moved) return fail('ویژگی پیدا نشد.');
+    if (attributeInUse(origin, moved.key)) return fail('این ویژگی در محصول استفاده شده و دسته‌اش عوض نمی‌شود.');
+    originSchema.splice(index, 1);
+    schema.push(moved);
+  }
   if (ui.editingAttr) {
     const field = schema.find((item) => item.key === ui.editingAttr);
-    if (attributeInUse(ui.leafId, field.key) && field.dataType !== dataType) return fail('نوع ویژگی استفاده‌شده قابل تغییر نیست.');
+    if (!field) return fail('ویژگی پیدا نشد.');
+    if (attributeInUse(leafId, field.key) && field.dataType !== dataType) return fail('نوع ویژگی استفاده‌شده قابل تغییر نیست.');
     Object.assign(field, { label, dataType, unit, options, required, filterable, variant });
     logChange(`ویرایش ویژگی ${label}`);
   } else {
     schema.push({ key: `attr-${Date.now().toString(36)}`, label, dataType, unit, options, required, filterable, variant, active: true });
     logChange(`تعریف ویژگی ${label}`);
   }
+  ui.leafId = leafId;
   persistCatalog();
   ui.modal = null;
   toast('ویژگی ذخیره شد', rerender);
