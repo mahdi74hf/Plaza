@@ -35,7 +35,7 @@ const library = {
 };
 
 function attr(key, extra) {
-  return { ...library[key], filterable: true, variant: false, required: false, active: true, ...extra };
+  return { ...library[key], dataType: 'single', unit: '', filterable: true, variant: false, required: false, active: true, ...extra };
 }
 
 function sku(code, combo, price, stock, extra = {}) {
@@ -146,10 +146,20 @@ function product(id, title, titleEn, model, leafId, brandId, status, publishedAt
 
 export let catalog = readCatalog();
 
+function normalizeField(field) {
+  if (!field.dataType) field.dataType = field.options?.length ? 'single' : 'text';
+  field.unit = field.unit || '';
+  field.options = field.options || [];
+  if (field.active === undefined) field.active = true;
+  return field;
+}
+
 function readCatalog() {
   try {
     const saved = localStorage.getItem(CATALOG_KEY);
-    return saved ? JSON.parse(saved) : seed();
+    const data = saved ? JSON.parse(saved) : seed();
+    Object.values(data.schemas || {}).forEach((fields) => fields.forEach(normalizeField));
+    return data;
   } catch {
     return seed();
   }
@@ -281,7 +291,11 @@ export function passesFilters(item, filters) {
     if (axis) {
       const matched = item.skus.some((entry) => values.includes(entry.combo?.[key]) && (!filters.availableOnly || purchasable(entry)));
       if (!matched) return false;
-    } else if (!values.includes(item.attributes?.[key])) return false;
+    } else {
+      const current = item.attributes?.[key];
+      const list = Array.isArray(current) ? current : [current];
+      if (!values.some((value) => list.includes(value))) return false;
+    }
   }
   const shown = displaySku(item, filters.attrs);
   if (filters.availableOnly && !item.skus.some((entry) => purchasable(entry) && matchingSkus(item, filters.attrs).includes(entry))) return false;
@@ -337,6 +351,25 @@ export function sharedFilters(leafIds) {
   return first.filter((item) => rest.every((list) => list.some((other) => other.key === item.key && other.label === item.label)));
 }
 
+export function missingRequired(field, value) {
+  if (!field.active || !field.required || field.variant) return false;
+  if (field.dataType === 'boolean') return value !== true && value !== false;
+  if (field.dataType === 'multi') return !Array.isArray(value) || value.length === 0;
+  if (field.dataType === 'number') return value === '' || value === null || value === undefined || Number.isNaN(Number(value));
+  return !String(value ?? '').trim();
+}
+
+export function needsSchemaUpdate(item) {
+  return schemaOf(item.leafId).some((field) => missingRequired(field, item.attributes?.[field.key]));
+}
+
+export function attributeInUse(leafId, key) {
+  return catalog.products.some((item) => item.leafId === leafId && (
+    (item.attributes?.[key] !== undefined && item.attributes?.[key] !== '' && !(Array.isArray(item.attributes[key]) && item.attributes[key].length === 0))
+    || item.skus.some((entry) => entry.combo?.[key])
+  ));
+}
+
 export function canPublish(item) {
   const errors = [];
   if (!item.title.trim()) errors.push('عنوان لازم است.');
@@ -345,8 +378,7 @@ export function canPublish(item) {
   if (!item.skus.length) errors.push('حداقل یک SKU لازم است.');
   if (item.brandId && !brandAllowed(brandById(item.brandId), item.leafId)) errors.push('Brand انتخاب‌شده برای این LeafCat مجاز یا فعال نیست.');
   for (const field of schemaOf(item.leafId)) {
-    if (!field.required || field.variant) continue;
-    if (!item.attributes?.[field.key]) errors.push(`مقدار «${field.label}» لازم است.`);
+    if (missingRequired(field, item.attributes?.[field.key])) errors.push(`مقدار «${field.label}» لازم است.`);
   }
   if (item.skus.some((entry) => entry.incompatible)) errors.push('SKU ناسازگار باید اصلاح شود.');
   const codes = catalog.products.flatMap((entry) => entry.skus.map((row) => row.code));

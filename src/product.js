@@ -1,35 +1,28 @@
 import {
   PRICE_BUCKETS,
-  RETURN_POLICY,
-  SORTS,
   activeLeaves,
-  approvedReviews,
+  attributeInUse,
   brandAllowed,
   brandById,
   brandsForLeaf,
   canPublish,
   canonicalPath,
   catalog,
-  contextLeaves,
-  customerById,
-  customers,
-  discountOf,
   displaySku,
   duplicateBrand,
   fa,
   isPublicProduct,
-  libraryAttributes,
   logChange,
+  missingRequired,
+  needsSchemaUpdate,
   normalize,
   passesFilters,
   persistCatalog,
   productById,
   productMatchesContext,
   productsUsingBrand,
-  publicReview,
   purchasable,
   publishedUsingBrand,
-  ratingOf,
   schemaOf,
   searchScore,
   sellable,
@@ -76,17 +69,17 @@ const ui = {
 };
 
 const tabs = [
+  ['schema', 'ویژگی', 'PRD-044'],
   ['brands', 'برند', 'PRD-046'],
   ['variants', 'واریانت', 'PRD-047'],
   ['products', 'محصول', 'PRD-032'],
-  ['reviews', 'نظرها', 'PRD-051'],
   ['shop', 'فروشگاه', 'PRD-054'],
 ];
 
+const typeLabels = { text: 'متن', number: 'عدد', boolean: 'بله/خیر', single: 'انتخاب تکی', multi: 'انتخاب چندتایی' };
+
 const decisions = [
-  ['مرتب‌سازی پیش‌فرض PLP', 'تا تعیین تیم محصول، این نمونه «پرفروش‌ترین» را پیش‌فرض فهرست دسته قرار داده است.'],
-  ['تعریف پرفروش‌ترین', 'بازه و اثر سفارش لغوشده یا مرجوع هنوز باز است؛ اینجا از عدد فروش نمونه استفاده می‌شود.'],
-  ['گارانتی', 'در PDP نمایش داده می‌شود، ولی تعریف و مدیریت گارانتی در وضعیت Hold است.'],
+  ['ساختار کد SKU', 'کد SKU در این نمونه به‌صورت نمونه ساخته می‌شود و قاعدهٔ نهایی آن هنوز باز است.'],
 ];
 
 export function productMeta() {
@@ -106,32 +99,53 @@ export function productContent(icon) {
       ${headAction(icon)}
     </div>
     <div class="prd-tabs">${tabs.map(([id, label, code]) => `<button type="button" data-tab="${id}" class="${ui.tab === id ? 'active' : ''}">${label}<small>${code}</small></button>`).join('')}</div>
-    ${ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'products' ? productsView() : ui.tab === 'reviews' ? reviewsView() : shopView()}
-    <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>برند، واریانت، محصول، نظر و فروشگاه در localStorage همین مرورگر می‌مانند و از CAT Tree فعال خوانده می‌شوند.</small></span></div></section>
+    ${ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'products' ? productsView() : shopView()}
+    <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>ویژگی LeafCat، برند، واریانت، محصول و فروشگاه در localStorage همین مرورگر می‌مانند.</small></span></div></section>
     ${modalHtml()}
     ${ui.toast ? `<div class="toast">${icon('check')} ${escape(ui.toast)}</div>` : ''}
   </div>`;
 }
 
 function heading() {
-  return { brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ', reviews: 'امتیاز و نظر', shop: 'فروشگاه' }[ui.tab];
+  return { schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ', shop: 'فروشگاه' }[ui.tab];
 }
 
 function subhead() {
   return {
+    schema: 'برای هر LeafCat ویژگی بساز و نوع آن را مشخص کن؛ مثلاً حافظه رم از جنس عدد',
     brands: 'ایجاد برند، محدودکردن آن به LeafCat و جلوگیری از غیرفعال‌سازی برند در حال استفاده',
-    variants: 'حداکثر دو محور Variant از Schema همان LeafCat و ساخت SKU فقط برای ترکیب‌های تأییدشده',
+    variants: 'حداکثر دو محور Variant از ویژگی‌های انتخابی همان LeafCat',
     products: 'اتصال به یک LeafCat فعال، ذخیره Draft و انتشار پس از تأیید',
-    reviews: 'ثبت نظر فقط با خرید معتبر و نمایش عمومی پس از تأیید مدیر محتوا',
-    shop: 'جست‌وجو، فیلتر، مرتب‌سازی، فهرست، صفحه محصول و مقایسه',
+    shop: 'جست‌وجو، فیلتر و فهرست محصولات منتشرشده',
   }[ui.tab];
 }
 
 function headAction(icon) {
+  if (ui.tab === 'schema') return `<button class="primary" data-action="new-attribute">${icon('plus')} ویژگی جدید</button>`;
   if (ui.tab === 'brands') return `<button class="primary" data-action="new-brand">${icon('plus')} برند جدید</button>`;
   if (ui.tab === 'products') return `<button class="primary" data-action="new-product">${icon('plus')} محصول جدید</button>`;
-  if (ui.tab === 'shop' && ui.shop.compare.length) return `<button class="primary" data-action="open-compare">مقایسه (${fa(ui.shop.compare.length)})</button>`;
   return '';
+}
+
+function schemaView() {
+  const leaves = activeLeaves();
+  const leaf = leaves.find((item) => item.node.id === ui.leafId) || leaves[0];
+  ui.leafId = leaf?.node.id;
+  const schema = ui.leafId ? schemaOf(ui.leafId) : [];
+  return `<div class="workspace">
+    <section class="card tree-card">
+      <div class="card-head"><div><h2>LeafCat فعال</h2><p>Schema فقط روی LeafCat تعریف می‌شود.</p></div><span>${fa(schema.length)} ویژگی</span></div>
+      <div class="entity-list">${leaves.map(({ node }) => `<button class="entity-row ${node.id === ui.leafId ? 'selected' : ''}" data-leaf="${node.id}"><b>${escape(node.name)}</b><small>${escape(pathLabel(node.id))}</small></button>`).join('') || '<p class="empty-copy">LeafCat فعالی در CAT Tree نیست.</p>'}</div>
+    </section>
+    ${leaf ? `<section class="card detail-card">
+      <div class="detail-head"><div><span class="type-pill leafcat">PRD-044</span><h2>${escape(leaf.node.name)}</h2><p>${escape(pathLabel(leaf.node.id))}</p></div></div>
+      <div class="schema-list">${schema.map((field) => `<article>
+        <div><b>${escape(field.label)}</b><small>${typeLabels[field.dataType] || field.dataType}${field.unit ? ` · ${escape(field.unit)}` : ''}${field.required ? ' · اجباری' : ''}${field.variant ? ' · Variant' : ''}${field.active ? '' : ' · غیرفعال'}</small></div>
+        <div class="detail-actions"><button class="action-button" data-action="edit-attribute" data-key="${field.key}">ویرایش</button><button class="action-button" data-action="toggle-attribute" data-key="${field.key}">${field.active ? 'غیرفعال' : 'فعال'}</button></div>
+      </article>`).join('') || '<p class="empty-copy">هنوز ویژگی‌ای تعریف نشده. مثلاً برای گوشی می‌توانی «حافظه رم» را با نوع عدد بسازی.</p>'}</div>
+      ${auditBox()}
+    </section>` : ''}
+  </div>`;
 }
 
 function brandsView() {
@@ -174,13 +188,11 @@ function variantsView() {
     ${leaf ? `<section class="card detail-card">
       <div class="detail-head"><div><span class="type-pill leafcat">LeafCat</span><h2>${escape(leaf.node.name)}</h2><p>${escape(pathLabel(leaf.node.id))}</p></div></div>
       <div class="schema-list">${schema.map((field) => `<article>
-        <div><b>${escape(field.label)}</b><small>${field.variant ? 'محور Variant' : 'ویژگی'} · ${field.filterable ? 'قابل فیلتر' : 'غیرقابل فیلتر'}</small></div>
-        <button class="action-button" data-action="toggle-axis" data-key="${field.key}">${field.variant ? 'برداشتن از SKU' : 'محور SKU'}</button>
-      </article>`).join('') || '<p class="empty-copy">هنوز Attributeای به این LeafCat وصل نشده است.</p>'}
+        <div><b>${escape(field.label)}</b><small>${typeLabels[field.dataType] || 'انتخابی'} · ${field.variant ? 'محور Variant' : 'ویژگی معمولی'}</small></div>
+        ${['single', 'multi'].includes(field.dataType) ? `<button class="action-button" data-action="toggle-axis" data-key="${field.key}">${field.variant ? 'برداشتن از SKU' : 'محور SKU'}</button>` : '<small>فقط ویژگی انتخابی محور SKU می‌شود</small>'}
+      </article>`).join('') || '<p class="empty-copy">اول در تب ویژگی، Attribute این LeafCat را تعریف کن.</p>'}
       </div>
-      <div class="option-box"><span>افزودن از Schema آماده</span><div>${libraryAttributes().filter((item) => !schema.some((field) => field.key === item.key)).map((item) => `<button class="chip-button" data-action="add-attr" data-key="${item.key}">${escape(item.label)}</button>`).join('') || '<small>همه ویژگی‌های آماده وصل شده‌اند.</small>'}</div></div>
-      ${schema.filter((item) => item.variant).map((field) => `<div class="option-box"><span>مقادیر ${escape(field.label)}</span><div>${field.options.map((option) => `<b class="value-pill">${escape(option)}</b>`).join('')}</div></div>`).join('')}
-      <p class="form-note">بیش از دو محور پذیرفته نمی‌شود. حذف مقدار یا محوری که در SKU استفاده شده، SKU را پاک نمی‌کند و آن را ناسازگار علامت می‌زند.</p>
+      <p class="form-note">بیش از دو محور پذیرفته نمی‌شود. ویژگی متن یا عدد محور Variant نیست.</p>
     </section>` : ''}
   </div>`;
 }
@@ -196,7 +208,7 @@ function productsView() {
     <div class="workspace">
       <section class="card tree-card">
         <div class="card-head"><div><h2>محصولات</h2><p>حذف دائمی در MVP نیست.</p></div></div>
-        <div class="entity-list">${catalog.products.map((entry) => `<button class="entity-row ${entry.id === ui.productId ? 'selected' : ''}" data-product="${entry.id}"><b>${escape(entry.title || 'بدون عنوان')}</b><small>${escape(pathLabel(entry.leafId) || 'بدون دسته')} · ${escape(brandById(entry.brandId)?.name || 'بدون برند')}</small><em class="${entry.status === 'published' ? '' : 'inactive'}">${statusLabel(entry.status)}</em></button>`).join('')}</div>
+        <div class="entity-list">${catalog.products.map((entry) => `<button class="entity-row ${entry.id === ui.productId ? 'selected' : ''}" data-product="${entry.id}"><b>${escape(entry.title || 'بدون عنوان')}</b><small>${escape(pathLabel(entry.leafId) || 'بدون دسته')} · ${escape(brandById(entry.brandId)?.name || 'بدون برند')}${needsSchemaUpdate(entry) ? ' · Needs Update' : ''}</small><em class="${entry.status === 'published' ? '' : 'inactive'}">${statusLabel(entry.status)}</em></button>`).join('')}</div>
       </section>
       ${item ? productDetail(item) : ''}
     </div>`;
@@ -216,6 +228,7 @@ function productDetail(item) {
       <div><span>SKU</span><b>${fa(item.skus.length)}</b></div>
       <div><span>Canonical</span><b>${escape(canonicalPath(item))}</b></div>
     </div>
+    ${needsSchemaUpdate(item) ? '<div class="delete-warning blocked"><b>Needs Update</b><p>یک ویژگی اجباری جدید برای این محصول خالی است. انتشار قبلی حفظ شده است.</p></div>' : ''}
     ${errors.length && item.status !== 'published' ? `<div class="delete-warning blocked"><b>قبل از انتشار</b><p>${errors.map(escape).join(' ')}</p></div>` : ''}
     <div class="sku-table">${item.skus.map((entry) => `<article class="${entry.incompatible ? 'bad' : ''}"><div><b>${escape(entry.code)}</b><small>${Object.values(entry.combo).join(' · ') || 'SKU پایه'} · قابل فروش ${fa(sellable(entry))}</small></div><em>${entry.price ? toman(entry.price) : 'بدون قیمت'}${entry.incompatible ? ' · ناسازگار' : ''}</em></article>`).join('') || '<p class="empty-copy">هنوز SKUای ساخته نشده است.</p>'}</div>
     <div class="detail-actions spread"><button class="secondary" data-action="make-skus">ساخت SKU</button><button class="secondary" data-action="links-product">مرتبط و Cross-sell</button></div>
@@ -251,8 +264,7 @@ function reviewsView() {
 }
 
 function shopView() {
-  if (ui.shop.view === 'pdp') return pdpView();
-  if (ui.shop.view === 'compare') return compareView();
+  ui.shop.view = 'list';
   return plpView();
 }
 
@@ -271,10 +283,9 @@ function plpView() {
           <div class="filter-block"><b>برند</b>${brandOptions.map((brand) => `<label><input type="checkbox" data-filter-brand="${brand.id}" ${ui.shop.brands.includes(brand.id) ? 'checked' : ''}/>${escape(brand.name)}</label>`).join('') || '<small>برندی در این نتیجه نیست.</small>'}</div>
           <div class="filter-block"><b>قیمت</b>${PRICE_BUCKETS.map((bucket) => `<label><input type="radio" name="price" data-filter-price="${bucket.id}" ${ui.shop.price === bucket.id ? 'checked' : ''}/>${bucket.label}</label>`).join('')}</div>
           <div class="filter-block"><label><input type="checkbox" data-filter-avail ${ui.shop.availableOnly ? 'checked' : ''}/>فقط موجودها</label></div>
-          ${filters.map((field) => `<div class="filter-block"><b>${escape(field.label)}</b>${field.options.map((option) => `<label><input type="checkbox" data-filter-attr="${field.key}" value="${escape(option)}" ${(ui.shop.attrs[field.key] || []).includes(option) ? 'checked' : ''}/>${escape(option)}</label>`).join('')}</div>`).join('')}
+          ${filters.filter((field) => ['single', 'multi'].includes(field.dataType) && field.options.length).map((field) => `<div class="filter-block"><b>${escape(field.label)}</b>${field.options.map((option) => `<label><input type="checkbox" data-filter-attr="${field.key}" value="${escape(option)}" ${(ui.shop.attrs[field.key] || []).includes(option) ? 'checked' : ''}/>${escape(option)}</label>`).join('')}</div>`).join('')}
         </aside>
         <div>
-          <label class="sort-line"><span>مرتب‌سازی</span><select data-sort>${sortOptions().map((item) => `<option value="${item.id}" ${ui.shop.sort === item.id ? 'selected' : ''}>${item.label}</option>`).join('')}</select></label>
           ${listing.items.length ? `<div class="card-grid">${listing.pageItems.map((item) => cardHtml(item)).join('')}</div>` : `<div class="empty-panel"><b>محصولی با این شرایط نیست</b><p>${ui.shop.query ? 'عبارت را عوض کن یا به فروشگاه برگرد.' : 'فیلترها را کم کن.'}</p></div>`}
           ${listing.pages > 1 ? `<div class="pager">${Array.from({ length: listing.pages }, (_, index) => `<button data-page="${index + 1}" class="${listing.page === index + 1 ? 'active' : ''}">${fa(index + 1)}</button>`).join('')}</div>` : ''}
         </div>
@@ -347,9 +358,8 @@ function offerBox(item, sku) {
 
 function cardHtml(item) {
   const sku = displaySku(item, ui.shop.attrs);
-  const off = discountOf(sku?.price, sku?.compareAt);
   const brand = brandById(item.brandId);
-  return `<article class="product-card"><button data-open="${item.id}"><div class="thumb">${escape(item.image || 'بدون تصویر')}</div><h3>${escape(item.title)}</h3>${brand ? `<small>${escape(brand.name)}</small>` : ''}<strong>${sku?.price ? toman(sku.price) : 'بدون قیمت'}</strong>${off ? `<em>${fa(off)}٪</em>` : ''}<span>${item.skus.some(purchasable) ? 'موجود' : 'ناموجود'}</span></button><button class="text-button" data-action="add-compare" data-id="${item.id}">مقایسه</button></article>`;
+  return `<article class="product-card"><div class="thumb">${escape(item.image || 'بدون تصویر')}</div><h3>${escape(item.title)}</h3>${brand ? `<small>${escape(brand.name)}</small>` : ''}<strong>${sku?.price ? toman(sku.price) : 'بدون قیمت'}</strong><span>${item.skus.some(purchasable) ? 'موجود' : 'ناموجود'}</span></article>`;
 }
 
 function rail(title, links, cross = false) {
@@ -384,7 +394,7 @@ function runShop() {
   }
   const unfiltered = source;
   const filtered = source.filter((item) => passesFilters(item, ui.shop));
-  const sort = sortOptions().some((item) => item.id === ui.shop.sort) ? ui.shop.sort : (searching ? 'relevance' : 'bestseller');
+  const sort = searching ? 'relevance' : 'bestseller';
   const items = sortProducts(filtered, sort, scores);
   const pages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
   const page = Math.min(ui.shop.page, pages);
@@ -421,6 +431,7 @@ function chips() {
 }
 
 function modalHtml() {
+  if (ui.modal === 'attribute') return attributeModal();
   if (ui.modal === 'brand') return brandModal();
   if (ui.modal === 'product') return productModal();
   if (ui.modal === 'sku') return skuModal();
@@ -449,10 +460,44 @@ function brandModal() {
   </section></div>`;
 }
 
+function attributeFields(leafId, item) {
+  return schemaOf(leafId).filter((field) => field.active && !field.variant).map((field) => {
+    const value = item?.attributes?.[field.key];
+    const label = `${escape(field.label)}${field.required ? ' *' : ''}${field.unit ? ` (${escape(field.unit)})` : ''}`;
+    if (field.dataType === 'number') return `<label><span>${label}</span><input data-attr="${field.key}" inputmode="decimal" value="${escape(value ?? '')}" /></label>`;
+    if (field.dataType === 'boolean') return `<label class="check-line"><input data-attr-bool="${field.key}" type="checkbox" ${value === true ? 'checked' : ''}/>${label}</label>`;
+    if (field.dataType === 'single') return `<label><span>${label}</span><select data-attr="${field.key}"><option value="">انتخاب کن</option>${field.options.map((option) => `<option value="${escape(option)}" ${value === option ? 'selected' : ''}>${escape(option)}</option>`).join('')}</select></label>`;
+    if (field.dataType === 'multi') {
+      const selected = Array.isArray(value) ? value : [];
+      return `<div class="option-box"><span>${label}</span><div>${field.options.map((option) => `<label class="chip-button"><input type="checkbox" data-attr-multi="${field.key}" value="${escape(option)}" ${selected.includes(option) ? 'checked' : ''}/>${escape(option)}</label>`).join('')}</div></div>`;
+    }
+    return `<label><span>${label}</span><input data-attr="${field.key}" value="${escape(value ?? '')}" /></label>`;
+  }).join('');
+}
+
+function attributeModal() {
+  const existing = schemaOf(ui.leafId).find((field) => field.key === ui.editingAttr);
+  const used = existing ? attributeInUse(ui.leafId, existing.key) : false;
+  return `<div class="backdrop" data-action="close"><section class="modal wide" onclick="event.stopPropagation()">
+    <header><div><span>PRD-044</span><h2>${existing ? 'ویرایش ویژگی' : 'ویژگی جدید'}</h2></div><button type="button" class="icon-button" data-action="close">×</button></header>
+    <div class="modal-body">
+      <label><span>نام ویژگی</span><input id="attr-label" value="${escape(existing?.label || '')}" placeholder="مثلاً حافظه رم" /></label>
+      <label><span>نوع داده</span><select id="attr-type" ${used ? 'disabled' : ''}>${Object.entries(typeLabels).map(([id, label]) => `<option value="${id}" ${existing?.dataType === id ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
+      <label><span>واحد، فقط برای عدد</span><input id="attr-unit" value="${escape(existing?.unit || '')}" placeholder="مثلاً گیگابایت" /></label>
+      <label><span>مقادیر مجاز، فقط برای انتخابی</span><textarea id="attr-options" placeholder="هر مقدار در یک خط">${escape((existing?.options || []).join('\n'))}</textarea></label>
+      <label class="check-line"><input id="attr-required" type="checkbox" ${existing?.required ? 'checked' : ''}/>اجباری</label>
+      <label class="check-line"><input id="attr-filterable" type="checkbox" ${existing?.filterable ? 'checked' : ''}/>قابل فیلتر در فهرست</label>
+      <label class="check-line"><input id="attr-variant" type="checkbox" ${existing?.variant ? 'checked' : ''}/>محور Variant</label>
+      <p class="form-error" id="form-error"></p>
+      <p class="form-note">${used ? 'این ویژگی در محصول استفاده شده و نوع آن قفل است.' : 'برای گوشی موبایل می‌توانی «حافظه رم» را با نوع عدد و واحد گیگابایت ثبت کنی.'}</p>
+    </div>
+    <footer><button type="button" class="ghost" data-action="close">انصراف</button><button type="button" class="primary" data-action="save-attribute">تأیید و ذخیره</button></footer>
+  </section></div>`;
+}
+
 function productModal() {
   const item = ui.editingId ? productById(ui.editingId) : null;
   const leafId = item?.leafId || activeLeaves()[0]?.node.id || '';
-  const fields = schemaOf(leafId).filter((field) => !field.variant);
   return `<div class="backdrop" data-action="close"><section class="modal wide" onclick="event.stopPropagation()">
     <header><div><span>PRD-032</span><h2>${item ? 'ویرایش محصول' : 'محصول جدید'}</h2></div><button class="icon-button" data-action="close">×</button></header>
     <div class="modal-body">
@@ -463,7 +508,7 @@ function productModal() {
       <label><span>برند</span><select id="product-brand"><option value="">بدون برند</option>${brandsForLeaf(leafId).map((brand) => `<option value="${brand.id}" ${item?.brandId === brand.id ? 'selected' : ''}>${escape(brand.name)}</option>`).join('')}</select></label>
       <label><span>تصویر اصلی</span><input id="product-image" value="${escape(item?.image || '')}" placeholder="شرح یا نام تصویر" /></label>
       <label><span>توضیح</span><textarea id="product-description">${escape(item?.description || '')}</textarea></label>
-      ${fields.map((field) => `<label><span>${escape(field.label)}${field.required ? ' *' : ''}</span>${field.options.length ? `<select data-attr="${field.key}">${field.options.map((option) => `<option ${item?.attributes?.[field.key] === option ? 'selected' : ''}>${escape(option)}</option>`).join('')}</select>` : `<input data-attr="${field.key}" value="${escape(item?.attributes?.[field.key] || '')}" />`}</label>`).join('')}
+      <div id="attr-fields">${attributeFields(leafId, item)}</div>
       <p class="form-error" id="form-error"></p>
     </div>
     <footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="save-product">ذخیره Draft</button></footer>
@@ -580,7 +625,7 @@ function fail(message) {
 export function bindProduct(rerender) {
   const root = document.querySelector('[data-product-root]');
   if (!root) return;
-  root.addEventListener('click', (event) => onClick(event, rerender));
+  root.addEventListener('click', (event) => onClick(event, rerender), true);
   root.addEventListener('change', (event) => onChange(event, rerender));
   const search = root.querySelector('#shop-search');
   if (search) {
@@ -630,7 +675,10 @@ function onClick(event, rerender) {
   if (action === 'save-brand') { saveBrand(rerender); return; }
   if (action === 'toggle-brand') { toggleBrand(rerender); return; }
   if (action === 'toggle-axis') { toggleAxis(event.target.closest('[data-key]').dataset.key, rerender); return; }
-  if (action === 'add-attr') { addAttr(event.target.closest('[data-key]').dataset.key, rerender); return; }
+  if (action === 'new-attribute') { ui.editingAttr = null; ui.modal = 'attribute'; rerender(); return; }
+  if (action === 'edit-attribute') { ui.editingAttr = event.target.closest('[data-key]').dataset.key; ui.modal = 'attribute'; rerender(); return; }
+  if (action === 'toggle-attribute') { toggleAttribute(event.target.closest('[data-key]').dataset.key, rerender); return; }
+  if (action === 'save-attribute') { saveAttribute(rerender); return; }
   if (action === 'new-product') { ui.editingId = null; ui.modal = 'product'; rerender(); return; }
   if (action === 'edit-product') { ui.editingId = ui.productId; ui.modal = 'product'; rerender(); return; }
   if (action === 'save-product') { saveProduct(rerender); return; }
@@ -671,6 +719,8 @@ function onChange(event, rerender) {
     const options = brandsForLeaf(target.value);
     if (brandSelect) brandSelect.innerHTML = `<option value="">بدون برند</option>${options.map((brand) => `<option value="${brand.id}">${escape(brand.name)}</option>`).join('')}`;
     if (brandSelect && options.some((brand) => brand.id === current)) brandSelect.value = current;
+    const fields = document.querySelector('#attr-fields');
+    if (fields) fields.innerHTML = attributeFields(target.value, null);
     return;
   }
   if (target.dataset.filterBrand) {
@@ -748,9 +798,53 @@ function toggleBrand(rerender) {
   toast('وضعیت برند ذخیره شد', rerender);
 }
 
+function saveAttribute(rerender) {
+  if (!ui.leafId) return fail('اول یک LeafCat انتخاب کن.');
+  const label = document.querySelector('#attr-label')?.value.trim();
+  const dataType = document.querySelector('#attr-type')?.value || 'text';
+  const unit = dataType === 'number' ? (document.querySelector('#attr-unit')?.value.trim() || '') : '';
+  const options = ['single', 'multi'].includes(dataType)
+    ? document.querySelector('#attr-options')?.value.split('\n').map((item) => item.trim()).filter(Boolean)
+    : [];
+  const required = !!document.querySelector('#attr-required')?.checked;
+  const filterable = !!document.querySelector('#attr-filterable')?.checked;
+  const variant = !!document.querySelector('#attr-variant')?.checked;
+  if (!label) return fail('نام ویژگی لازم است.');
+  const schema = catalog.schemas[ui.leafId] || (catalog.schemas[ui.leafId] = []);
+  if (schema.some((field) => field.key !== ui.editingAttr && normalize(field.label) === normalize(label))) return fail('ویژگی با این نام در همین LeafCat وجود دارد.');
+  if (['single', 'multi'].includes(dataType) && !options.length) return fail('برای ویژگی انتخابی حداقل یک مقدار مجاز لازم است.');
+  if (variant && !['single', 'multi'].includes(dataType)) return fail('محور Variant فقط برای ویژگی انتخابی مجاز است.');
+  if (variant && schema.filter((field) => field.variant && field.key !== ui.editingAttr).length >= 2) return fail('هر LeafCat حداکثر دو محور Variant دارد.');
+  if (ui.editingAttr) {
+    const field = schema.find((item) => item.key === ui.editingAttr);
+    if (attributeInUse(ui.leafId, field.key) && field.dataType !== dataType) return fail('نوع ویژگی استفاده‌شده قابل تغییر نیست.');
+    Object.assign(field, { label, dataType, unit, options, required, filterable, variant });
+    logChange(`ویرایش ویژگی ${label}`);
+  } else {
+    schema.push({ key: `attr-${Date.now().toString(36)}`, label, dataType, unit, options, required, filterable, variant, active: true });
+    logChange(`تعریف ویژگی ${label}`);
+  }
+  persistCatalog();
+  ui.modal = null;
+  toast('ویژگی ذخیره شد', rerender);
+}
+
+function toggleAttribute(key, rerender) {
+  const field = schemaOf(ui.leafId).find((item) => item.key === key);
+  field.active = !field.active;
+  if (!field.active) field.variant = false;
+  logChange(`${field.active ? 'فعال' : 'غیرفعال'} شد: ${field.label}`);
+  persistCatalog();
+  rerender();
+}
+
 function toggleAxis(key, rerender) {
   const schema = schemaOf(ui.leafId);
   const field = schema.find((item) => item.key === key);
+  if (!['single', 'multi'].includes(field.dataType)) {
+    toast('محور Variant فقط برای ویژگی انتخابی است.', rerender);
+    return;
+  }
   if (!field.variant && schema.filter((item) => item.variant).length >= 2) {
     ui.toast = 'هر LeafCat حداکثر دو محور Variant دارد.';
     rerender();
@@ -770,15 +864,6 @@ function toggleAxis(key, rerender) {
   rerender();
 }
 
-function addAttr(key, rerender) {
-  const source = libraryAttributes().find((item) => item.key === key);
-  catalog.schemas[ui.leafId] = schemaOf(ui.leafId);
-  catalog.schemas[ui.leafId].push({ ...source, filterable: true, variant: false, required: false, active: true });
-  logChange(`ویژگی ${source.label} به ${ui.leafId} اضافه شد`);
-  persistCatalog();
-  rerender();
-}
-
 function saveProduct(rerender) {
   const title = document.querySelector('#product-title')?.value.trim() || '';
   const leafId = document.querySelector('#product-leaf')?.value;
@@ -794,13 +879,24 @@ function saveProduct(rerender) {
     attributes: {},
   };
   document.querySelectorAll('[data-attr]').forEach((node) => { payload.attributes[node.dataset.attr] = node.value.trim(); });
+  document.querySelectorAll('[data-attr-bool]').forEach((node) => { payload.attributes[node.dataset.attrBool] = node.checked; });
+  document.querySelectorAll('[data-attr-multi]').forEach((node) => {
+    const key = node.dataset.attrMulti;
+    payload.attributes[key] = payload.attributes[key] || [];
+    if (node.checked) payload.attributes[key].push(node.value);
+  });
+  for (const field of schemaOf(leafId)) {
+    if (!field.active || field.variant) continue;
+    const value = payload.attributes[field.key];
+    if (field.dataType === 'number' && value !== '' && value !== undefined && Number.isNaN(Number(value))) return fail(`«${field.label}» باید عدد باشد.`);
+    if (field.dataType === 'single' && value && !field.options.includes(value)) return fail(`مقدار «${field.label}» خارج از گزینه‌های مجاز است.`);
+  }
   if (brandId && !brandAllowed(brandById(brandId), leafId)) return fail('این برند برای LeafCat انتخاب‌شده مجاز نیست.');
   if (ui.editingId) {
     const item = productById(ui.editingId);
     const leafChanged = item.leafId !== leafId;
     Object.assign(item, payload);
     if (leafChanged) item.skus.forEach((entry) => { entry.incompatible = true; });
-    if (item.status === 'published' && canPublish(item).length) item.status = 'draft';
     logChange(`ویرایش محصول ${item.title || item.id}`);
     ui.productId = item.id;
   } else {
@@ -811,7 +907,7 @@ function saveProduct(rerender) {
   }
   persistCatalog();
   ui.modal = null;
-  toast('پیش‌نویس ذخیره شد', rerender);
+  toast('محصول ذخیره شد', rerender);
 }
 
 function confirmSkus(rerender) {
