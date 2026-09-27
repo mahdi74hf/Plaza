@@ -100,6 +100,18 @@ function detectSource(url) {
   return SOURCES.find((source) => host.includes(source.domain)) || null;
 }
 
+function detectedJobSource(urls) {
+  const ids = [...new Set(urls.map((url) => detectSource(url)?.id).filter(Boolean))];
+  return ids.length === 1 ? ids[0] : 'mixed';
+}
+
+function excelSourceSummary(preview) {
+  const entries = Object.entries(preview?.bySource || {});
+  if (!entries.length) return '—';
+  if (entries.length === 1) return entries[0][0];
+  return entries.map(([name, count]) => `${name} (${count})`).join(' · ');
+}
+
 export function validateUrls(lines) {
   const seen = new Set();
   const rows = [];
@@ -164,7 +176,7 @@ function buildJob({ method, source, categories, urls, creator, run }) {
   const job = {
     id: jobId,
     method,
-    source: method === 'category' ? source : 'mixed',
+    source: method === 'category' ? source : detectedJobSource(uniqueUrls),
     categories: categories || [],
     status: run ? 'running' : 'queued',
     creator,
@@ -345,7 +357,7 @@ function listView(icon) {
       <tbody>${jobs.length ? jobs.map((job) => `<tr>
         <td><code>${escape(job.id.slice(-8))}</code></td>
         <td>${job.method === 'excel' ? 'Excel' : 'دسته‌بندی'}</td>
-        <td>${job.method === 'excel' ? 'ترکیبی' : sourceLabel(job.source)}</td>
+        <td>${job.source === 'mixed' ? 'ترکیبی' : sourceLabel(job.source)}</td>
         <td><span class="status-pill ${job.status}">${JOB_STATUS[job.status] || job.status}</span></td>
         <td>${job.stats.success} موفق · ${job.stats.failed} ناموفق · ${job.stats.duplicate} تکراری</td>
         <td>${escape(job.creator)}</td>
@@ -374,8 +386,8 @@ function wizardView(icon) {
       <p class="hint">در Prototype فایل CSV/TXT با یک URL در هر خط هم پذیرفته می‌شود.</p>
       ${preview ? `<div class="validation-box">
         <b>نتیجه اعتبارسنجی — ${escape(w.excelFileName)}</b>
+        <p><b>سورس:</b> ${escape(excelSourceSummary(preview))}</p>
         <p>کل ${preview.total} · معتبر ${preview.valid.length} · نامعتبر ${preview.invalid} · تکراری ${preview.duplicate}</p>
-        <p>${Object.entries(preview.bySource).map(([k, v]) => `${escape(k)}: ${v}`).join(' · ') || '—'}</p>
         <ul class="compact">${preview.rows.slice(0, 6).map((row) => `<li>${row.ok ? '✓' : '✕'} ردیف ${row.row}: ${escape(row.reason || row.url)}</li>`).join('')}${preview.rows.length > 6 ? '<li>…</li>' : ''}</ul>
       </div>` : ''}
     </div>` : ''}
@@ -386,7 +398,7 @@ function wizardView(icon) {
     </div>` : ''}
     ${step === 3 ? `<div class="card confirm-card">
       <p><b>روش:</b> ${w.method === 'excel' ? 'Excel' : 'دسته‌بندی'}</p>
-      ${w.method === 'excel' && preview ? `<p><b>لینک معتبر:</b> ${preview.valid.length}</p>` : ''}
+      ${w.method === 'excel' && preview ? `<p><b>سورس:</b> ${escape(excelSourceSummary(preview))}</p><p><b>لینک معتبر:</b> ${preview.valid.length}</p>` : ''}
       ${w.method === 'category' ? `<p><b>سورس:</b> ${sourceLabel(w.source)}</p><p><b>دسته‌ها:</b> ${w.categories.join('، ') || '—'}</p><p><b>تخمین لینک:</b> ${Math.max(3, w.categories.length * 4)}</p>` : ''}
       <p class="hint">محصولات موفق فقط به‌صورت Draft در تب محصول همین Prototype ساخته می‌شوند.</p>
     </div>` : ''}
