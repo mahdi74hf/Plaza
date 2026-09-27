@@ -1028,6 +1028,42 @@ svg {
 .modal.wide { width: min(680px, 96vw); }
 .link-list div { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 10px; }
 .link-list span { background: #f3f5eb; border-radius: 8px; padding: 3px 6px; }
+.crawler-shell { display: grid; gap: 14px; }
+.crawler-shell .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.field-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); }
+.field-inline select { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; background: #fff; }
+.table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: var(--shadow); }
+.data-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+.data-table th, .data-table td { border-bottom: 1px solid var(--line); padding: 10px; text-align: right; vertical-align: top; }
+.data-table th { background: var(--bg); color: var(--muted); font-size: 9px; }
+.data-table .url { max-width: 220px; word-break: break-all; direction: ltr; text-align: left; font-size: 8px; }
+.status-pill { display: inline-block; border-radius: 999px; padding: 3px 8px; font-size: 8px; background: var(--primary-soft); color: var(--primary-accent); }
+.status-pill.failed, .status-pill.cancelled { background: #ffe9e5; color: var(--danger); }
+.status-pill.success, .status-pill.completed { background: #e8f6ec; color: var(--green); }
+.status-pill.duplicate, .status-pill.completed_errors { background: #fff8e8; color: #9b721d; }
+.status-pill.running, .status-pill.crawling, .status-pill.syncing { background: var(--primary-soft); color: var(--primary); }
+.wizard-steps { display: flex; gap: 8px; flex-wrap: wrap; }
+.wizard-steps span { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font-size: 9px; color: var(--muted); background: #fff; }
+.wizard-steps span.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.choice-card { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 16px; text-align: right; box-shadow: var(--shadow); }
+.choice-card.active { border-color: var(--primary); background: var(--primary-soft); }
+.choice-card b { display: block; font-size: 12px; margin-bottom: 4px; }
+.choice-card small { color: var(--muted); font-size: 9px; }
+.form-card, .confirm-card { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 16px; box-shadow: var(--shadow); }
+.validation-box { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+.validation-box ul.compact { margin: 8px 0 0; padding-right: 16px; font-size: 9px; color: var(--muted); }
+.chip-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip-check { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font-size: 9px; background: #fff; }
+.wizard-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.stat-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.stat-grid article { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 12px; box-shadow: var(--shadow); }
+.stat-grid small { display: block; color: var(--muted); font-size: 8px; }
+.stat-grid b { font-size: 16px; }
+.progress { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
+.meta-line { font-size: 9px; color: var(--muted); }
+.linkish { border: 0; background: transparent; color: var(--primary); font-size: 9px; padding: 0; }
+.hint { font-size: 9px; color: var(--muted); margin-top: 8px; }
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr 76px;
@@ -1066,7 +1102,7 @@ svg {
   .workspace {
     grid-template-columns: 1fr;
   }
-  .plp-layout, .pdp-grid, .info-grid, .card-grid { grid-template-columns: 1fr; }
+  .plp-layout, .pdp-grid, .info-grid, .card-grid, .stat-grid { grid-template-columns: 1fr; }
   .detail-card {
     position: static;
   }

@@ -36,6 +36,19 @@ import {
   variantAxes,
   PAGE_SIZE,
 } from './catalog.js';
+import {
+  cancelJob,
+  crawlerHeading,
+  crawlerSubhead,
+  crawlerView,
+  downloadTemplate,
+  exportJobCsv,
+  handleCrawlerFile,
+  retryFailed,
+  runWizardJob,
+  selectedJob,
+  crawlerState as crawlerUi,
+} from './crawler.js';
 import { findNode, pathLabel, walk } from './tree.js';
 
 const ui = {
@@ -73,6 +86,7 @@ const tabs = [
   ['brands', 'برند', 'PRD-046'],
   ['variants', 'واریانت', 'PRD-047'],
   ['products', 'محصول', 'PRD-032'],
+  ['crawler', 'کرالر', 'PRD-066'],
 ];
 
 const typeLabels = { text: 'متن', number: 'عدد', boolean: 'بله/خیر', single: 'انتخاب تکی', multi: 'انتخاب چندتایی' };
@@ -98,7 +112,7 @@ export function productContent(icon) {
       ${headAction(icon)}
     </div>
     <div class="prd-tabs">${tabs.map(([id, label, code]) => `<button type="button" data-tab="${id}" class="${ui.tab === id ? 'active' : ''}">${label}<small>${code}</small></button>`).join('')}</div>
-    ${ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : productsView()}
+    ${ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : productsView()}
     <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>ویژگی LeafCat، برند، واریانت و محصول در localStorage همین مرورگر می‌مانند.</small></span></div></section>
     ${modalHtml()}
     ${ui.toast ? `<div class="toast">${icon('check')} ${escape(ui.toast)}</div>` : ''}
@@ -106,10 +120,12 @@ export function productContent(icon) {
 }
 
 function heading() {
+  if (ui.tab === 'crawler') return crawlerHeading();
   return { schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ' }[ui.tab] || 'محصولات کاتالوگ';
 }
 
 function subhead() {
+  if (ui.tab === 'crawler') return crawlerSubhead();
   return {
     schema: 'برای هر LeafCat ویژگی بساز و نوع آن را مشخص کن؛ مثلاً حافظه رم از جنس عدد',
     brands: 'ایجاد برند، محدودکردن آن به LeafCat و جلوگیری از غیرفعال‌سازی برند در حال استفاده',
@@ -119,6 +135,7 @@ function subhead() {
 }
 
 function headAction(icon) {
+  if (ui.tab === 'crawler' && crawlerUi.view === 'list') return `<button class="primary" data-action="crawler-new">${icon('plus')} Job جدید</button>`;
   if (ui.tab === 'schema') return `<button class="primary" data-action="new-attribute">${icon('plus')} ویژگی جدید</button>`;
   if (ui.tab === 'brands') return `<button class="primary" data-action="new-brand">${icon('plus')} برند جدید</button>`;
   if (ui.tab === 'products') return `<button class="primary" data-action="new-product">${icon('plus')} محصول جدید</button>`;
@@ -717,6 +734,37 @@ function onClick(event, rerender) {
   if (action === 'add-compare') { addCompare(event.target.closest('[data-id]').dataset.id, rerender); return; }
   if (action === 'open-compare') { ui.shop.view = 'compare'; rerender(); return; }
   if (action === 'remove-compare') { ui.shop.compare = ui.shop.compare.filter((id) => id !== event.target.closest('[data-id]').dataset.id); rerender(); return; }
+  if (action === 'crawler-new') { crawlerUi.view = 'wizard'; crawlerUi.wizardStep = 1; rerender(); return; }
+  if (action === 'crawler-back-list') { crawlerUi.view = 'list'; crawlerUi.selectedJobId = null; rerender(); return; }
+  if (action === 'crawler-method') { crawlerUi.draft.method = event.target.closest('[data-method]').dataset.method; rerender(); return; }
+  if (action === 'crawler-template') { downloadTemplate(); return; }
+  if (action === 'crawler-prev') { crawlerUi.wizardStep = Math.max(1, crawlerUi.wizardStep - 1); rerender(); return; }
+  if (action === 'crawler-next') {
+    const w = crawlerUi.draft;
+    if (crawlerUi.wizardStep === 2 && w.method === 'excel' && !w.excelPreview?.valid.length) return toast('فایل معتبر با حداقل یک لینک بارگذاری کن.', rerender);
+    if (crawlerUi.wizardStep === 2 && w.method === 'category' && !w.categories.length) return toast('حداقل یک دسته‌بندی انتخاب کن.', rerender);
+    crawlerUi.wizardStep = Math.min(3, crawlerUi.wizardStep + 1);
+    rerender();
+    return;
+  }
+  if (action === 'crawler-run') {
+    const result = runWizardJob(rerender);
+    if (result.error) return toast(result.error, rerender);
+    toast('Job کرال شروع شد', rerender);
+    return;
+  }
+  if (action === 'crawler-open') { crawlerUi.selectedJobId = event.target.closest('[data-id]').dataset.id; crawlerUi.view = 'detail'; rerender(); return; }
+  if (action === 'crawler-export') { const job = selectedJob(); if (job) exportJobCsv(job); return; }
+  if (action === 'crawler-cancel') { const job = selectedJob(); if (job) { cancelJob(job, rerender); toast('Job لغو شد', rerender); } return; }
+  if (action === 'crawler-retry-failed') {
+    const job = selectedJob();
+    if (!job) return;
+    const ids = [...document.querySelectorAll('[data-crawler-pick]:checked')].map((node) => node.value);
+    retryFailed(job, ids, rerender);
+    toast('Retry انجام شد', rerender);
+    return;
+  }
+  if (action === 'crawler-open-draft') { ui.tab = 'products'; ui.productId = event.target.closest('[data-id]').dataset.id; ui.modal = null; rerender(); return; }
 }
 
 function onChange(event, rerender) {
@@ -769,6 +817,28 @@ function onChange(event, rerender) {
   if (target.dataset.axis) return;
   if (target.dataset.installment !== undefined) { ui.shop.offer = target.checked ? 'installment' : 'cash'; rerender(); return; }
   if (target.dataset.diff !== undefined) { ui.shop.diffOnly = target.checked; rerender(); }
+  if (target.id === 'crawler-source') { crawlerUi.draft.source = target.value; crawlerUi.draft.categories = []; rerender(); return; }
+  if (target.id === 'crawler-cat-q') { crawlerUi.draft.categoryQuery = target.value; rerender(); return; }
+  if (target.dataset.crawlerCat !== undefined) {
+    const values = new Set(crawlerUi.draft.categories);
+    target.checked ? values.add(target.value) : values.delete(target.value);
+    crawlerUi.draft.categories = [...values];
+    rerender();
+    return;
+  }
+  if (target.dataset.crawlerFilter) {
+    if (target.dataset.crawlerFilter === 'status') crawlerUi.listStatus = target.value;
+    if (target.dataset.crawlerFilter === 'source') crawlerUi.listSource = target.value;
+    rerender();
+    return;
+  }
+  if (target.dataset.crawlerItemFilter) {
+    if (target.dataset.crawlerItemFilter === 'status') crawlerUi.itemFilter = target.value;
+    if (target.dataset.crawlerItemFilter === 'source') crawlerUi.itemSource = target.value;
+    rerender();
+    return;
+  }
+  if (target.id === 'crawler-file' && target.files?.[0]) { handleCrawlerFile(target.files[0], rerender); return; }
 }
 
 function saveBrand(rerender) {
