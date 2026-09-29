@@ -1079,6 +1079,22 @@ svg {
 .excel-sheet { max-height: 420px; overflow: auto; }
 .excel-table th { position: sticky; top: 0; z-index: 1; background: #e9f3fd; }
 .status-pill.scheduled { background: #fff8e8; color: #9b721d; }
+.demo-callout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #cfe4fb;
+  background: linear-gradient(135deg, #f5faff, #fff);
+  box-shadow: var(--shadow);
+}
+.demo-callout b { display: block; font-size: 11px; margin-bottom: 4px; }
+.demo-callout p { margin: 0; font-size: 9px; color: var(--muted); max-width: 520px; line-height: 1.7; }
+.demo-callout-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr 76px;

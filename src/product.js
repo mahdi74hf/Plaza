@@ -43,7 +43,9 @@ import {
   crawlerView,
   downloadTemplate,
   exportJobCsv,
+  forceStartScheduledJob,
   handleCrawlerFile,
+  openCrawlerDemoView,
   retryFailed,
   runWizardJob,
   selectedJob,
@@ -100,9 +102,34 @@ export function productMeta() {
   return {
     code: current?.[2] || 'PRD-032',
     name: current?.[1] || 'محصول',
+    tab: ui.tab,
     crumb: 'Product',
-    gaps: decisions.length,
+    gaps: ui.tab === 'crawler' ? 1 : decisions.length,
   };
+}
+
+export function applyProductDeepLink(params) {
+  const tab = params.get('tab');
+  if (tab && tabs.some(([id]) => id === tab)) ui.tab = tab;
+  if (ui.tab !== 'crawler') return;
+  const crawler = params.get('crawler');
+  if (crawler === 'wizard') openCrawlerDemoView('wizard');
+  else if (crawler === 'report') openCrawlerDemoView('detail');
+  else if (crawler === 'scheduled') {
+    openCrawlerDemoView('list');
+    const job = crawlerUi.jobs.find((entry) => entry.status === 'scheduled');
+    if (job) {
+      crawlerUi.view = 'detail';
+      crawlerUi.selectedJobId = job.id;
+      crawlerUi.detailTab = 'progress';
+    }
+  }
+  const jobId = params.get('job');
+  if (jobId && crawlerUi.jobs.some((entry) => entry.id === jobId)) {
+    crawlerUi.view = 'detail';
+    crawlerUi.selectedJobId = jobId;
+    crawlerUi.detailTab = params.get('view') === 'excel' ? 'excel' : 'progress';
+  }
 }
 
 export function productContent(icon) {
@@ -665,7 +692,13 @@ function onClick(event, rerender) {
   const modal = event.target.closest('.modal');
   if (ui.modal && !modal) return;
   const tab = event.target.closest('[data-tab]');
-  if (tab) { ui.tab = tab.dataset.tab; ui.modal = null; rerender(); return; }
+  if (tab) {
+    ui.tab = tab.dataset.tab;
+    ui.modal = null;
+    window.__plazaSyncUrl?.();
+    rerender();
+    return;
+  }
   const brand = event.target.closest('[data-brand]');
   if (brand) { ui.brandId = brand.dataset.brand; rerender(); return; }
   const leaf = event.target.closest('[data-leaf]');
@@ -785,6 +818,24 @@ function onClick(event, rerender) {
     return;
   }
   if (action === 'crawler-open-draft') { ui.tab = 'products'; ui.productId = event.target.closest('[data-id]').dataset.id; ui.modal = null; rerender(); return; }
+  if (action === 'crawler-demo-report') { openCrawlerDemoView('detail'); rerender(); return; }
+  if (action === 'crawler-demo-wizard') { openCrawlerDemoView('wizard'); rerender(); return; }
+  if (action === 'crawler-demo-scheduled') {
+    openCrawlerDemoView('list');
+    const job = crawlerUi.jobs.find((entry) => entry.status === 'scheduled');
+    if (job) {
+      crawlerUi.view = 'detail';
+      crawlerUi.selectedJobId = job.id;
+      crawlerUi.detailTab = 'progress';
+    }
+    rerender();
+    return;
+  }
+  if (action === 'crawler-force-start') {
+    const job = selectedJob();
+    if (job && forceStartScheduledJob(job, rerender)) toast('Job برای دمو شروع شد', rerender);
+    return;
+  }
 }
 
 function onChange(event, rerender) {

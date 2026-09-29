@@ -1,5 +1,5 @@
 import './style.css';
-import { bindProduct, openProductGaps, productContent, productMeta } from './product.js';
+import { applyProductDeepLink, bindProduct, openProductGaps, productContent, productMeta } from './product.js';
 import { countActiveType, countNodes, countType, findNode, getSiblings, persistTree, removeNode, tree } from './tree.js';
 
 const icon = (name) => ({
@@ -32,14 +32,21 @@ const openDecisions = [
   ['تغییر LeafCat', 'اثر آن بر Audit، Search و SEO نیاز به تصمیم دارد.'],
 ];
 
-const state = {
-  screen: 'category',
-  selected: 'phone',
-  expanded: new Set(['it', 'digital', 'mobile', 'computer']),
-  modal: null,
-  toast: '',
-  search: '',
-};
+function readLaunchState() {
+  const params = new URLSearchParams(window.location.search);
+  const screen = params.get('screen') === 'product' ? 'product' : 'category';
+  if (screen === 'product') applyProductDeepLink(params);
+  return {
+    screen,
+    selected: 'phone',
+    expanded: new Set(['it', 'digital', 'mobile', 'computer']),
+    modal: null,
+    toast: '',
+    search: '',
+  };
+}
+
+const state = readLaunchState();
 
 function uniqueId(type) {
   return `${type.toLowerCase()}-${Date.now().toString(36)}`;
@@ -197,10 +204,34 @@ function showToast(text) {
   setTimeout(() => { state.toast = ''; render(); }, 2200);
 }
 
+function syncDemoUrl() {
+  const url = new URL(window.location.href);
+  if (state.screen === 'product') {
+    const meta = productMeta();
+    url.searchParams.set('screen', 'product');
+    url.searchParams.set('tab', meta.tab);
+    if (meta.tab !== 'crawler') {
+      url.searchParams.delete('crawler');
+      url.searchParams.delete('job');
+      url.searchParams.delete('view');
+    }
+  } else {
+    url.searchParams.delete('screen');
+    url.searchParams.delete('tab');
+    url.searchParams.delete('crawler');
+    url.searchParams.delete('job');
+    url.searchParams.delete('view');
+  }
+  window.history.replaceState({}, '', url);
+}
+
+window.__plazaSyncUrl = syncDemoUrl;
+
 function bindEvents() {
   document.querySelectorAll('[data-screen]').forEach((button) => button.addEventListener('click', () => {
     state.screen = button.dataset.screen;
     state.modal = null;
+    syncDemoUrl();
     render();
   }));
   if (state.screen === 'product') {
@@ -308,3 +339,4 @@ function bindEvents() {
 }
 
 render();
+syncDemoUrl();

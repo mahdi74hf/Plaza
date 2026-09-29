@@ -6,6 +6,16 @@
 
 - `PRD-001 — ایجاد ساختار دسته‌بندی براساس CAT Tree`
 - Entity Product: ویژگی LeafCat (PRD-044)، برند، واریانت و SKU، ایجاد و انتشار، محصولات مرتبط و SEO
+- **PRD-066 — پنل کرالر محصولات** (تب «کرالر» در بخش محصول): Job، Wizard چهار مرحله، زمان‌بندی، گزارش Excel در پنل
+
+### لینک دمو PRD-066 (پس از Deploy)
+
+- مستقیم به کرالر: `?screen=product&tab=crawler`
+- Wizard جدید: `?screen=product&tab=crawler&crawler=wizard`
+- گزارش Excel نمونه: `?screen=product&tab=crawler&crawler=report`
+- Job زمان‌بندی‌شده: `?screen=product&tab=crawler&crawler=scheduled`
+
+در فهرست Job دو نمونه از قبل وجود دارد (تکمیل‌شده با خطا + زمان‌بندی‌شده). برای دمو بدون انتظار، در جزئیات Job زمان‌بندی‌شده «شروع فوری (دمو)» را بزن.
 
 از منوی کناری بین «دسته‌بندی» و «محصول» جابه‌جا شو. داده هر دو بخش در localStorage همان مرورگر می‌ماند.
 

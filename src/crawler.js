@@ -1,6 +1,6 @@
 import { catalog, logChange, persistCatalog } from './catalog.js';
 
-export const CRAWLER_KEY = 'plaza-crawler-jobs-v1';
+export const CRAWLER_KEY = 'plaza-crawler-jobs-v2';
 
 export const SOURCES = [
   { id: 'digikala', label: 'دیجی‌کالا', domain: 'digikala.com' },
@@ -41,10 +41,39 @@ export const ITEM_STATUS = {
 function readJobs() {
   try {
     const raw = localStorage.getItem(CRAWLER_KEY);
-    return raw ? JSON.parse(raw) : seedJobs();
+    if (raw) return JSON.parse(raw);
+    const legacy = localStorage.getItem('plaza-crawler-jobs-v1');
+    if (legacy) {
+      const jobs = JSON.parse(legacy);
+      if (Array.isArray(jobs) && jobs.length) {
+        if (!jobs.some((job) => job.status === 'scheduled')) jobs.unshift(scheduledDemoJob());
+        localStorage.setItem(CRAWLER_KEY, JSON.stringify(jobs));
+        return jobs;
+      }
+    }
+    return seedJobs();
   } catch {
     return seedJobs();
   }
+}
+
+function scheduledDemoJob() {
+  const start = new Date(Date.now() + 45 * 60 * 1000);
+  start.setSeconds(0, 0);
+  const local = new Date(start.getTime() - start.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  return buildJob({
+    method: 'excel',
+    source: 'digikala',
+    categories: [],
+    urls: [
+      'https://www.digikala.com/product/dkp-demo-1/',
+      'https://www.technolife.com/product/tl-demo-1/',
+    ],
+    creator: 'مهدی فرحزادی',
+    run: false,
+    startMode: 'scheduled',
+    scheduledAt: local,
+  });
 }
 
 function seedJobs() {
@@ -63,7 +92,10 @@ function seedJobs() {
   sample.status = 'completed_errors';
   sample.finishedAt = sample.updatedAt;
   finalizeJob(sample);
-  return [sample];
+  sample.items.forEach((item, index) => {
+    if (item.status === 'success') item.title = `نمونه محصول کرال‌شده ${index + 1}`;
+  });
+  return [scheduledDemoJob(), sample];
 }
 
 export let crawlerState = {
@@ -204,6 +236,32 @@ function buildJob({ method, source, categories, urls, creator, run, startMode = 
   };
   if (run && !scheduled) simulateJob(job);
   return job;
+}
+
+export function forceStartScheduledJob(job, rerender) {
+  if (!job || job.status !== 'scheduled') return false;
+  job.status = 'running';
+  job.startedAt = new Date().toISOString();
+  job.updatedAt = job.startedAt;
+  simulateJob(job);
+  persistJobs();
+  rerender?.();
+  return true;
+}
+
+export function openCrawlerDemoView(mode = 'list') {
+  crawlerState.view = mode === 'wizard' ? 'wizard' : mode === 'detail' ? 'detail' : 'list';
+  crawlerState.wizardStep = 1;
+  if (mode === 'detail') {
+    const pick =
+      crawlerState.jobs.find((job) => job.status === 'completed_errors' || job.status === 'completed') ||
+      crawlerState.jobs[0];
+    crawlerState.selectedJobId = pick?.id || null;
+    crawlerState.detailTab = 'excel';
+  } else {
+    crawlerState.selectedJobId = null;
+    crawlerState.detailTab = 'progress';
+  }
 }
 
 export function processDueScheduledJobs() {
@@ -391,6 +449,14 @@ function listView(icon) {
     return true;
   });
   return `<section class="crawler-shell">
+    <div class="demo-callout">
+      <div><b>راهنمای دمو PRD-066</b><p>Job تکمیل‌شده با خطا + Job زمان‌بندی‌شده از قبل در فهرست است. Wizard چهار مرحله‌ای: ورودی → زمان‌بندی → تأیید.</p></div>
+      <div class="demo-callout-actions">
+        <button type="button" class="secondary" data-action="crawler-demo-report">نمایش گزارش Excel</button>
+        <button type="button" class="secondary" data-action="crawler-demo-wizard">Job جدید (Wizard)</button>
+        <button type="button" class="secondary" data-action="crawler-demo-scheduled">Job زمان‌بندی‌شده</button>
+      </div>
+    </div>
     <div class="toolbar">
       <button type="button" class="primary" data-action="crawler-new">Job جدید</button>
       <label class="field-inline">وضعیت<select id="crawler-filter-status" data-crawler-filter="status">
@@ -484,6 +550,7 @@ function detailView(icon) {
       <div class="toolbar">
         <button type="button" class="secondary" data-action="crawler-export">دانلود Excel</button>
         ${job.status === 'running' || job.stats.failed ? `<button type="button" class="secondary" data-action="crawler-retry-failed">Retry ناموفق‌ها</button>` : ''}
+        ${job.status === 'scheduled' ? `<button type="button" class="primary" data-action="crawler-force-start">شروع فوری (دمو)</button>` : ''}
         ${job.status === 'scheduled' || job.status === 'running' || job.stats.pending ? `<button type="button" class="secondary" data-action="crawler-cancel">لغو Job</button>` : ''}
       </div>
     </div>
