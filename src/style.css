@@ -1064,6 +1064,21 @@ svg {
 .meta-line { font-size: 9px; color: var(--muted); }
 .linkish { border: 0; background: transparent; color: var(--primary); font-size: 9px; padding: 0; }
 .hint { font-size: 9px; color: var(--muted); margin-top: 8px; }
+.detail-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.detail-tabs button {
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 10px;
+}
+.detail-tabs button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.excel-panel { display: grid; gap: 10px; }
+.excel-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; font-size: 10px; }
+.excel-toolbar span { color: var(--muted); font-size: 9px; }
+.excel-sheet { max-height: 420px; overflow: auto; }
+.excel-table th { position: sticky; top: 0; z-index: 1; background: #e9f3fd; }
+.status-pill.scheduled { background: #fff8e8; color: #9b721d; }
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr 76px;

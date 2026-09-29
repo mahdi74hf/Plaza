@@ -743,17 +743,37 @@ function onClick(event, rerender) {
     const w = crawlerUi.draft;
     if (crawlerUi.wizardStep === 2 && w.method === 'excel' && !w.excelPreview?.valid.length) return toast('فایل معتبر با حداقل یک لینک بارگذاری کن.', rerender);
     if (crawlerUi.wizardStep === 2 && w.method === 'category' && !w.categories.length) return toast('حداقل یک دسته‌بندی انتخاب کن.', rerender);
-    crawlerUi.wizardStep = Math.min(3, crawlerUi.wizardStep + 1);
+    if (crawlerUi.wizardStep === 3) {
+      w.scheduledAt = document.querySelector('#crawler-scheduled-at')?.value || w.scheduledAt;
+    }
+    crawlerUi.wizardStep = Math.min(4, crawlerUi.wizardStep + 1);
+    rerender();
+    return;
+  }
+  if (action === 'crawler-start-mode') {
+    crawlerUi.draft.startMode = event.target.closest('[data-mode]').dataset.mode;
+    rerender();
+    return;
+  }
+  if (action === 'crawler-detail-tab') {
+    crawlerUi.detailTab = event.target.closest('[data-tab]').dataset.tab;
     rerender();
     return;
   }
   if (action === 'crawler-run') {
+    crawlerUi.draft.scheduledAt = document.querySelector('#crawler-scheduled-at')?.value || crawlerUi.draft.scheduledAt;
     const result = runWizardJob(rerender);
     if (result.error) return toast(result.error, rerender);
-    toast('Job کرال شروع شد', rerender);
+    toast(result.scheduled ? 'Job زمان‌بندی شد' : 'Job کرال شروع شد', rerender);
     return;
   }
-  if (action === 'crawler-open') { crawlerUi.selectedJobId = event.target.closest('[data-id]').dataset.id; crawlerUi.view = 'detail'; rerender(); return; }
+  if (action === 'crawler-open') {
+    crawlerUi.selectedJobId = event.target.closest('[data-id]').dataset.id;
+    crawlerUi.view = 'detail';
+    crawlerUi.detailTab = 'progress';
+    rerender();
+    return;
+  }
   if (action === 'crawler-export') { const job = selectedJob(); if (job) exportJobCsv(job); return; }
   if (action === 'crawler-cancel') { const job = selectedJob(); if (job) { cancelJob(job, rerender); toast('Job لغو شد', rerender); } return; }
   if (action === 'crawler-retry-failed') {
@@ -839,6 +859,7 @@ function onChange(event, rerender) {
     return;
   }
   if (target.id === 'crawler-file' && target.files?.[0]) { handleCrawlerFile(target.files[0], rerender); return; }
+  if (target.id === 'crawler-scheduled-at') { crawlerUi.draft.scheduledAt = target.value; return; }
 }
 
 function saveBrand(rerender) {

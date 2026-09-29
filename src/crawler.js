@@ -18,12 +18,15 @@ export const SOURCE_CATEGORIES = {
 
 export const JOB_STATUS = {
   queued: 'در انتظار',
+  scheduled: 'زمان‌بندی‌شده',
   running: 'در حال اجرا',
   completed: 'تکمیل‌شده',
   completed_errors: 'تکمیل‌شده با خطا',
   failed: 'ناموفق',
   cancelled: 'لغوشده',
 };
+
+export const WIZARD_MAX_STEP = 4;
 
 export const ITEM_STATUS = {
   pending: 'در انتظار',
@@ -73,6 +76,7 @@ export let crawlerState = {
   listSource: 'all',
   itemFilter: 'all',
   itemSource: 'all',
+  detailTab: 'progress',
   selectedItems: new Set(),
 };
 
@@ -84,7 +88,15 @@ function emptyWizard() {
     categoryQuery: '',
     excelPreview: null,
     excelFileName: '',
+    startMode: 'now',
+    scheduledAt: '',
   };
+}
+
+function defaultScheduleLocal() {
+  const d = new Date(Date.now() + 60 * 60 * 1000);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
 }
 
 function persistJobs() {
@@ -153,7 +165,7 @@ export function validateUrls(lines) {
   return { rows, valid, invalid, duplicate, total: rows.length, bySource };
 }
 
-function buildJob({ method, source, categories, urls, creator, run }) {
+function buildJob({ method, source, categories, urls, creator, run, startMode = 'now', scheduledAt = '' }) {
   const jobId = id('job');
   const now = new Date().toISOString();
   const uniqueUrls = [...new Set(urls)];
@@ -173,22 +185,40 @@ function buildJob({ method, source, categories, urls, creator, run }) {
     startedAt: '',
     finishedAt: '',
   }));
+  const scheduled = startMode === 'scheduled' && scheduledAt;
   const job = {
     id: jobId,
     method,
     source: method === 'category' ? source : detectedJobSource(uniqueUrls),
     categories: categories || [],
-    status: run ? 'running' : 'queued',
+    status: scheduled ? 'scheduled' : run ? 'running' : 'queued',
+    startMode: scheduled ? 'scheduled' : 'now',
+    scheduledStartAt: scheduled ? new Date(scheduledAt).toISOString() : '',
     creator,
     createdAt: now,
     updatedAt: now,
-    startedAt: run ? now : '',
+    startedAt: run && !scheduled ? now : '',
     finishedAt: '',
     items,
     stats: summarize(items),
   };
-  if (run) simulateJob(job);
+  if (run && !scheduled) simulateJob(job);
   return job;
+}
+
+export function processDueScheduledJobs() {
+  const now = Date.now();
+  let changed = false;
+  crawlerState.jobs.forEach((job) => {
+    if (job.status !== 'scheduled' || !job.scheduledStartAt) return;
+    if (new Date(job.scheduledStartAt).getTime() > now) return;
+    job.status = 'running';
+    job.startedAt = new Date().toISOString();
+    job.updatedAt = job.startedAt;
+    simulateJob(job);
+    changed = true;
+  });
+  if (changed) persistJobs();
 }
 
 function summarize(items) {
@@ -329,9 +359,27 @@ export function crawlerSubhead() {
 }
 
 export function crawlerView(icon) {
+  processDueScheduledJobs();
   if (crawlerState.view === 'wizard') return wizardView(icon);
   if (crawlerState.view === 'detail') return detailView(icon);
   return listView(icon);
+}
+
+export function jobReportRows(job) {
+  return job.items.map((item) => ({
+    source: sourceLabel(item.source),
+    categoryOrigin: item.categoryOrigin || '—',
+    url: item.url,
+    title: item.title || '—',
+    status: ITEM_STATUS[item.status] || item.status,
+    stage: item.stage,
+    errorCode: item.errorCode || '—',
+    errorMessage: item.errorMessage || '—',
+    draftId: item.draftId || '—',
+    attempts: item.attempts,
+    startedAt: fmtDate(item.startedAt),
+    finishedAt: fmtDate(item.finishedAt),
+  }));
 }
 
 function listView(icon) {
@@ -353,15 +401,15 @@ function listView(icon) {
       </select></label>
     </div>
     <div class="table-wrap"><table class="data-table">
-      <thead><tr><th>شناسه</th><th>روش</th><th>سورس</th><th>وضعیت</th><th>آمار</th><th>سازنده</th><th>ایجاد</th><th></th></tr></thead>
+      <thead><tr><th>شناسه</th><th>روش</th><th>سورس</th><th>وضعیت</th><th>شروع</th><th>آمار</th><th>سازنده</th><th></th></tr></thead>
       <tbody>${jobs.length ? jobs.map((job) => `<tr>
         <td><code>${escape(job.id.slice(-8))}</code></td>
         <td>${job.method === 'excel' ? 'Excel' : 'دسته‌بندی'}</td>
         <td>${job.source === 'mixed' ? 'ترکیبی' : sourceLabel(job.source)}</td>
         <td><span class="status-pill ${job.status}">${JOB_STATUS[job.status] || job.status}</span></td>
+        <td>${job.status === 'scheduled' ? fmtDate(job.scheduledStartAt) : fmtDate(job.startedAt || job.createdAt)}</td>
         <td>${job.stats.success} موفق · ${job.stats.failed} ناموفق · ${job.stats.duplicate} تکراری</td>
         <td>${escape(job.creator)}</td>
-        <td>${fmtDate(job.createdAt)}</td>
         <td><button type="button" class="secondary" data-action="crawler-open" data-id="${job.id}">مشاهده</button></td>
       </tr>`).join('') : '<tr><td colspan="8">هنوز Jobی ثبت نشده است.</td></tr>'}</tbody>
     </table></div>
@@ -374,8 +422,9 @@ function wizardView(icon) {
   const cats = SOURCE_CATEGORIES[w.source] || [];
   const filteredCats = cats.filter((name) => !w.categoryQuery || name.includes(w.categoryQuery));
   const preview = w.excelPreview;
+  const scheduleValue = w.scheduledAt || defaultScheduleLocal();
   return `<section class="crawler-shell wizard">
-    <div class="wizard-steps">${[1, 2, 3].map((n) => `<span class="${step >= n ? 'active' : ''}">${n}. ${n === 1 ? 'روش ورودی' : n === 2 ? 'ورودی' : 'تأیید'}</span>`).join('')}</div>
+    <div class="wizard-steps">${[1, 2, 3, 4].map((n) => `<span class="${step >= n ? 'active' : ''}">${n}. ${n === 1 ? 'روش ورودی' : n === 2 ? 'ورودی' : n === 3 ? 'زمان‌بندی' : 'تأیید'}</span>`).join('')}</div>
     ${step === 1 ? `<div class="card-grid two">
       <button type="button" class="choice-card ${w.method === 'excel' ? 'active' : ''}" data-action="crawler-method" data-method="excel"><b>فایل Excel</b><small>ستون product_url</small></button>
       <button type="button" class="choice-card ${w.method === 'category' ? 'active' : ''}" data-action="crawler-method" data-method="category"><b>دسته‌بندی سورس</b><small>کشف لینک محصولات</small></button>
@@ -396,16 +445,24 @@ function wizardView(icon) {
       <label class="field">جست‌وجوی دسته<input id="crawler-cat-q" value="${escape(w.categoryQuery)}" placeholder="نام دسته"/></label>
       <div class="chip-grid">${filteredCats.map((name) => `<label class="chip-check"><input type="checkbox" data-crawler-cat value="${escape(name)}" ${w.categories.includes(name) ? 'checked' : ''}/><span>${escape(name)}</span></label>`).join('')}</div>
     </div>` : ''}
-    ${step === 3 ? `<div class="card confirm-card">
+    ${step === 3 ? `<div class="card form-card">
+      <div class="card-grid two">
+        <button type="button" class="choice-card ${w.startMode === 'now' ? 'active' : ''}" data-action="crawler-start-mode" data-mode="now"><b>شروع فوری</b><small>بلافاصله بعد از تأیید</small></button>
+        <button type="button" class="choice-card ${w.startMode === 'scheduled' ? 'active' : ''}" data-action="crawler-start-mode" data-mode="scheduled"><b>زمان‌بندی</b><small>تاریخ و ساعت شروع</small></button>
+      </div>
+      ${w.startMode === 'scheduled' ? `<label class="field">زمان شروع<input type="datetime-local" id="crawler-scheduled-at" value="${escape(scheduleValue)}"/></label>` : '<p class="hint">Job بلافاصله پس از تأیید نهایی وارد صف اجرا می‌شود.</p>'}
+    </div>` : ''}
+    ${step === 4 ? `<div class="card confirm-card">
       <p><b>روش:</b> ${w.method === 'excel' ? 'Excel' : 'دسته‌بندی'}</p>
       ${w.method === 'excel' && preview ? `<p><b>سورس:</b> ${escape(excelSourceSummary(preview))}</p><p><b>لینک معتبر:</b> ${preview.valid.length}</p>` : ''}
       ${w.method === 'category' ? `<p><b>سورس:</b> ${sourceLabel(w.source)}</p><p><b>دسته‌ها:</b> ${w.categories.join('، ') || '—'}</p><p><b>تخمین لینک:</b> ${Math.max(3, w.categories.length * 4)}</p>` : ''}
+      <p><b>شروع:</b> ${w.startMode === 'scheduled' ? `زمان‌بندی — ${fmtDate(new Date(scheduleValue).toISOString())}` : 'فوری'}</p>
       <p class="hint">محصولات موفق فقط به‌صورت Draft در تب محصول همین Prototype ساخته می‌شوند.</p>
     </div>` : ''}
     <div class="wizard-actions">
       <button type="button" class="secondary" data-action="crawler-back-list">انصراف</button>
       ${step > 1 ? `<button type="button" class="secondary" data-action="crawler-prev">مرحله قبل</button>` : ''}
-      ${step < 3 ? `<button type="button" class="primary" data-action="crawler-next">مرحله بعد</button>` : `<button type="button" class="primary" data-action="crawler-run">شروع Job</button>`}
+      ${step < WIZARD_MAX_STEP ? `<button type="button" class="primary" data-action="crawler-next">مرحله بعد</button>` : `<button type="button" class="primary" data-action="crawler-run">${w.startMode === 'scheduled' ? 'ثبت زمان‌بندی' : 'شروع Job'}</button>`}
     </div>
   </section>`;
 }
@@ -413,26 +470,35 @@ function wizardView(icon) {
 function detailView(icon) {
   const job = selectedJob();
   if (!job) return listView(icon);
+  const tab = crawlerState.detailTab;
   const items = filteredItems(job);
   const progress = job.stats.total ? Math.round(((job.stats.success + job.stats.failed + job.stats.duplicate + job.stats.cancelled) / job.stats.total) * 100) : 0;
+  const report = jobReportRows(job);
+  const scheduleLine = job.status === 'scheduled' && job.scheduledStartAt
+    ? `شروع برنامه‌ریزی‌شده: ${fmtDate(job.scheduledStartAt)}`
+    : `شروع: ${fmtDate(job.startedAt)} · پایان: ${fmtDate(job.finishedAt)}`;
   return `<section class="crawler-shell detail">
     <div class="detail-head">
       <button type="button" class="secondary" data-action="crawler-back-list">← فهرست Job</button>
       <div><span class="status-pill ${job.status}">${JOB_STATUS[job.status]}</span><code>${escape(job.id)}</code></div>
       <div class="toolbar">
-        <button type="button" class="secondary" data-action="crawler-export">دانلود گزارش Excel (.csv)</button>
-        <button type="button" class="secondary" data-action="crawler-retry-failed">Retry ناموفق‌ها</button>
-        <button type="button" class="secondary" data-action="crawler-cancel">لغو Job</button>
+        <button type="button" class="secondary" data-action="crawler-export">دانلود Excel</button>
+        ${job.status === 'running' || job.stats.failed ? `<button type="button" class="secondary" data-action="crawler-retry-failed">Retry ناموفق‌ها</button>` : ''}
+        ${job.status === 'scheduled' || job.status === 'running' || job.stats.pending ? `<button type="button" class="secondary" data-action="crawler-cancel">لغو Job</button>` : ''}
       </div>
     </div>
-    <div class="stat-grid">
+    <div class="detail-tabs">
+      <button type="button" class="${tab === 'progress' ? 'active' : ''}" data-action="crawler-detail-tab" data-tab="progress">پیشرفت Job</button>
+      <button type="button" class="${tab === 'excel' ? 'active' : ''}" data-action="crawler-detail-tab" data-tab="excel">نتیجه Excel</button>
+    </div>
+    ${tab === 'progress' ? `<div class="stat-grid">
       <article><small>کل</small><b>${job.stats.total}</b></article>
       <article><small>موفق</small><b>${job.stats.success}</b></article>
       <article><small>ناموفق</small><b>${job.stats.failed}</b></article>
       <article><small>تکراری</small><b>${job.stats.duplicate}</b></article>
       <article><small>پیشرفت</small><b>${progress}%</b></article>
     </div>
-    <p class="meta-line">شروع: ${fmtDate(job.startedAt)} · پایان: ${fmtDate(job.finishedAt)} · به‌روزرسانی: ${fmtDate(job.updatedAt)}</p>
+    <p class="meta-line">${scheduleLine} · به‌روزرسانی: ${fmtDate(job.updatedAt)}</p>
     <div class="progress"><span style="width:${progress}%"></span></div>
     <div class="toolbar">
       <label class="field-inline">وضعیت آیتم<select id="crawler-item-status" data-crawler-item-filter="status">
@@ -445,7 +511,7 @@ function detailView(icon) {
     <div class="table-wrap"><table class="data-table">
       <thead><tr><th></th><th>عنوان</th><th>سورس</th><th>URL</th><th>مرحله</th><th>وضعیت</th><th>Draft</th><th>خطا</th></tr></thead>
       <tbody>${items.map((item) => `<tr>
-        <td>${item.status === 'failed' ? `<input type="checkbox" data-crawler-pick value="${item.id}" ${crawlerState.selectedItems.has(item.id) ? 'checked' : ''}/>` : ''}</td>
+        <td>${item.status === 'failed' ? `<input type="checkbox" data-crawler-pick value="${item.id}"/>` : ''}</td>
         <td>${escape(item.title || '—')}</td>
         <td>${sourceLabel(item.source)}</td>
         <td class="url">${escape(item.url)}</td>
@@ -454,7 +520,25 @@ function detailView(icon) {
         <td>${item.draftId ? `<button type="button" class="linkish" data-action="crawler-open-draft" data-id="${item.draftId}">${escape(item.draftId)}</button>` : '—'}</td>
         <td>${escape(item.errorMessage || '—')}</td>
       </tr>`).join('')}</tbody>
-    </table></div>
+    </table></div>` : `<div class="excel-panel">
+      <div class="excel-toolbar"><b>گزارش نتیجه کرال</b><span>${report.length} ردیف · موفق ${job.stats.success} · ناموفق ${job.stats.failed} · تکراری ${job.stats.duplicate}</span></div>
+      <div class="table-wrap excel-sheet"><table class="data-table excel-table">
+        <thead><tr><th>سورس</th><th>دسته مبدأ</th><th>URL</th><th>عنوان</th><th>وضعیت</th><th>مرحله</th><th>کد خطا</th><th>پیام خطا</th><th>Draft</th><th>تلاش</th></tr></thead>
+        <tbody>${report.map((row) => `<tr>
+          <td>${escape(row.source)}</td>
+          <td>${escape(row.categoryOrigin)}</td>
+          <td class="url">${escape(row.url)}</td>
+          <td>${escape(row.title)}</td>
+          <td>${escape(row.status)}</td>
+          <td>${escape(row.stage)}</td>
+          <td>${escape(row.errorCode)}</td>
+          <td>${escape(row.errorMessage)}</td>
+          <td>${escape(row.draftId)}</td>
+          <td>${row.attempts}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <p class="hint">این نما همان ساختار فایل Excel خروجی است؛ برای فایل `.xlsx` از «دانلود Excel» استفاده کن.</p>
+    </div>`}
   </section>`;
 }
 
@@ -523,22 +607,32 @@ export function runWizardJob(rerender, onOpenProduct) {
       `https://www.${w.source === 'snapshop' ? 'snappshop.ir' : `${w.source}.com`}/category/${index + 1}/p-bad/`,
     ]);
   }
+  const startMode = w.startMode || 'now';
+  const scheduledAt = w.scheduledAt || defaultScheduleLocal();
+  if (startMode === 'scheduled') {
+    const when = new Date(scheduledAt).getTime();
+    if (!when || Number.isNaN(when)) return { error: 'زمان شروع معتبر نیست.' };
+    if (when <= Date.now()) return { error: 'زمان شروع باید در آینده باشد.' };
+  }
   const job = buildJob({
     method: w.method,
     source: w.source,
     categories: w.categories,
     urls,
     creator: 'مهدی فرحزادی',
-    run: true,
+    run: startMode !== 'scheduled',
+    startMode,
+    scheduledAt: startMode === 'scheduled' ? scheduledAt : '',
   });
   crawlerState.jobs.unshift(job);
   persistJobs();
   crawlerState.view = 'detail';
   crawlerState.selectedJobId = job.id;
+  crawlerState.detailTab = job.status === 'scheduled' ? 'progress' : 'progress';
   crawlerState.draft = emptyWizard();
   crawlerState.wizardStep = 1;
   rerender();
-  return {};
+  return { scheduled: job.status === 'scheduled' };
 }
 
 export function retryFailed(job, ids, rerender) {
@@ -564,6 +658,13 @@ export function retryFailed(job, ids, rerender) {
 }
 
 export function cancelJob(job, rerender) {
+  if (job.status === 'scheduled') {
+    job.status = 'cancelled';
+    job.updatedAt = new Date().toISOString();
+    persistJobs();
+    rerender();
+    return;
+  }
   job.items.forEach((item) => {
     if (item.status === 'pending') item.status = 'cancelled';
   });
