@@ -1,5 +1,6 @@
 import './style.css';
 import { applyProductDeepLink, bindProduct, openProductGaps, productContent, productMeta } from './product.js';
+import { countProductsUnderNode, logChange, productsOnLeaf } from './catalog.js';
 import { countActiveType, countNodes, countType, findNode, getSiblings, persistTree, removeNode, tree } from './tree.js';
 
 const icon = (name) => ({
@@ -46,7 +47,10 @@ function readLaunchState() {
   };
 }
 
-const state = readLaunchState();
+const state = {
+  ...readLaunchState(),
+  pendingEdit: null,
+};
 
 function uniqueId(type) {
   return `${type.toLowerCase()}-${Date.now().toString(36)}`;
@@ -126,13 +130,13 @@ function createModal() {
 function editModal() {
   const { node, parents } = findNode(state.selected);
   return `<div class="backdrop" data-action="close"><section class="modal" onclick="event.stopPropagation()">
-    <header><div><span>UPDATE NODE</span><h2>ویرایش نود</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
+    <header><div><span>PRD-043 · CAT-04</span><h2>ویرایش نود</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
     <div class="modal-body">
       <div class="parent-info"><small>نوع و Parent قابل تغییر نیستند</small><b>${node.type}</b><span>${parents.at(-1) ? escapeHtml(parents.at(-1).name) : 'ریشه'}</span></div>
       <label><span>نام نود</span><input id="node-title" value="${escapeHtml(node.name)}" autocomplete="off" /></label>
       <label><span>وضعیت</span><select id="node-status"><option value="active" ${node.status !== 'inactive' ? 'selected' : ''}>فعال</option><option value="inactive" ${node.status === 'inactive' ? 'selected' : ''}>غیرفعال</option></select></label>
       <p class="form-error" id="form-error"></p>
-      <div class="form-note">${icon('info')} غیرفعال‌کردن Parent دارای Child در این نمونه برای تست UI مجاز است.</div>
+      <div class="form-note">${icon('info')} PRD-043: غیرفعال‌سازی Parent اثر Shop را روی زیرشاخه دارد؛ Product حذف نمی‌شود. فعال‌سازی مجدد وقتی Parent غیرفعال است مجاز نیست.</div>
     </div>
     <footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="save-edit">ذخیره تغییرات</button></footer>
   </section></div>`;
@@ -141,12 +145,26 @@ function editModal() {
 function deleteModal() {
   const { node } = findNode(state.selected);
   const hasChildren = Boolean(node.children?.length);
+  const onLeaf = node.type === 'LeafCat' ? productsOnLeaf(node.id) : [];
+  const blockedProducts = onLeaf.length > 0;
   return `<div class="backdrop" data-action="close"><section class="modal confirm-modal" onclick="event.stopPropagation()">
-    <header><div><span>DELETE NODE</span><h2>حذف «${escapeHtml(node.name)}»</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
+    <header><div><span>PRD-043 · CAT-05</span><h2>حذف «${escapeHtml(node.name)}»</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
     <div class="modal-body">
-      ${hasChildren ? `<div class="delete-warning blocked"><b>این نود قابل حذف نیست</b><p>نود دارای Child است. ابتدا Childهای آن را حذف کن.</p></div>` : `<div class="delete-warning"><b>این عملیات برگشت‌پذیر نیست</b><p>نود از CAT Tree و حافظه مرورگر حذف می‌شود.</p></div>`}
+      ${hasChildren ? `<div class="delete-warning blocked"><b>این نود قابل حذف نیست</b><p>نود دارای Child است. ابتدا Childهای آن را حذف کن.</p></div>` : blockedProducts ? `<div class="delete-warning blocked"><b>LeafCat دارای Product است</b><p>${onLeaf.length} محصول به این LeafCat متصل است. ابتدا Product را منتقل یا غیرفعال کن.</p></div>` : `<div class="delete-warning"><b>این عملیات برگشت‌پذیر نیست</b><p>نود از CAT Tree و حافظه مرورگر حذف می‌شود. تاریخچه در گزارش تغییرات ثبت می‌شود.</p></div>`}
     </div>
-    <footer><button class="ghost" data-action="close">انصراف</button>${hasChildren ? '' : '<button class="delete-button" data-action="confirm-delete">حذف نود</button>'}</footer>
+    <footer><button class="ghost" data-action="close">انصراف</button>${hasChildren || blockedProducts ? '' : '<button class="delete-button" data-action="confirm-delete">حذف نود</button>'}</footer>
+  </section></div>`;
+}
+
+function deactivateModal() {
+  const { node } = findNode(state.selected);
+  const affected = countProductsUnderNode(node.id);
+  return `<div class="backdrop" data-action="close"><section class="modal confirm-modal" onclick="event.stopPropagation()">
+    <header><div><span>PRD-043 · CAT-04</span><h2>غیرفعال‌سازی «${escapeHtml(node.name)}»</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
+    <div class="modal-body">
+      <div class="delete-warning"><b>اثر تغییر</b><p>تا ${affected} محصول از Shop و Discovery این مسیر خارج می‌شوند. Product در CMS حذف یا Unpublish نمی‌شود.</p><p>Childها در Tree همان وضعیت ذخیره‌شده را نگه می‌دارند.</p></div>
+    </div>
+    <footer><button class="ghost" data-action="close">انصراف</button><button class="delete-button" data-action="confirm-deactivate">تأیید غیرفعال‌سازی</button></footer>
   </section></div>`;
 }
 
@@ -192,7 +210,7 @@ function render() {
         <section class="scope"><div>${icon('info')}<span><b>ذخیره‌سازی Prototype</b><small>عملیات ایجاد، مشاهده، ویرایش و حذف در localStorage مرورگر ذخیره می‌شود؛ SEO و نمایش سایت در PRDهای بعدی هستند.</small></span></div><button data-action="decisions">مشاهده کمبودهای PRD</button></section>`}
       </div>
     </main>
-    ${product ? '' : (state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'decisions' ? decisionsModal() : '')}
+    ${product ? '' : (state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'deactivate' ? deactivateModal() : state.modal === 'decisions' ? decisionsModal() : '')}
     ${!product && state.toast ? `<div class="toast">${icon('check')} ${state.toast}</div>` : ''}
   </div>`;
   bindEvents();
@@ -301,11 +319,39 @@ function bindEvents() {
         document.querySelector('#form-error').textContent = 'نود هم‌نام و هم‌نوع زیر این Parent وجود دارد.';
         return;
       }
+      if (status === 'active' && found.parents.some((item) => item.status === 'inactive')) {
+        document.querySelector('#form-error').textContent = 'Parent غیرفعال است. ابتدا مسیر بالادست را فعال کن.';
+        return;
+      }
+      if (status === 'inactive' && found.node.status !== 'inactive') {
+        state.pendingEdit = { title, status };
+        state.modal = 'deactivate';
+        render();
+        return;
+      }
       found.node.name = title;
       found.node.status = status;
       persistTree();
+      logChange(`CAT Tree: ویرایش «${title}»`);
       state.modal = null;
       showToast(`تغییرات «${title}» ذخیره شد`);
+      return;
+    }
+    if (action === 'confirm-deactivate') {
+      const found = findNode(state.selected);
+      const pending = state.pendingEdit;
+      if (!found || !pending) {
+        state.modal = null;
+        render();
+        return;
+      }
+      found.node.name = pending.title;
+      found.node.status = pending.status;
+      persistTree();
+      logChange(`CAT Tree: غیرفعال‌سازی «${pending.title}»`);
+      state.pendingEdit = null;
+      state.modal = null;
+      showToast(`«${pending.title}» غیرفعال شد`);
       return;
     }
     if (action === 'confirm-delete') {
@@ -314,6 +360,7 @@ function bindEvents() {
       const nextSelected = found.parents.at(-1)?.id || tree.find(node => node.id !== state.selected)?.id;
       removeNode(state.selected);
       persistTree();
+      logChange(`CAT Tree: حذف «${title}»`);
       state.selected = nextSelected || null;
       state.modal = null;
       showToast(`نود «${title}» حذف شد`);

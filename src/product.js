@@ -268,6 +268,7 @@ function productDetail(item) {
       <div><span>برند</span><b>${escape(brand?.name || 'ندارد')}</b></div>
       <div><span>تصویر اصلی</span><b>${item.image ? 'دارد' : 'ندارد'}</b></div>
       <div><span>SKU</span><b>${fa(item.skus.length)}</b></div>
+      <div><span>Tagها</span><b>${item.tags?.length ? item.tags.map((id) => catalog.marketingTags.find((tag) => tag.id === id)?.label || id).join('، ') : '—'}</b></div>
       <div><span>Canonical</span><b>${escape(canonicalPath(item))}</b></div>
     </div>
     ${needsSchemaUpdate(item) ? '<div class="delete-warning blocked"><b>Needs Update</b><p>یک ویژگی اجباری جدید برای این محصول خالی است. انتشار قبلی حفظ شده است.</p></div>' : ''}
@@ -312,6 +313,7 @@ function shopView() {
 
 function plpView() {
   const listing = runShop();
+  const multiLeaf = listing.leafIds.length > 1;
   const filters = listing.leafIds.length === 1 ? schemaOf(listing.leafIds[0]).filter((item) => item.active && item.filterable) : sharedFilters(listing.leafIds);
   const brandOptions = catalog.brands.filter((brand) => listing.unfiltered.some((item) => item.brandId === brand.id));
   return `<section class="shop-frame">
@@ -325,6 +327,7 @@ function plpView() {
           <div class="filter-block"><b>برند</b>${brandOptions.map((brand) => `<label><input type="checkbox" data-filter-brand="${brand.id}" ${ui.shop.brands.includes(brand.id) ? 'checked' : ''}/>${escape(brand.name)}</label>`).join('') || '<small>برندی در این نتیجه نیست.</small>'}</div>
           <div class="filter-block"><b>قیمت</b>${PRICE_BUCKETS.map((bucket) => `<label><input type="radio" name="price" data-filter-price="${bucket.id}" ${ui.shop.price === bucket.id ? 'checked' : ''}/>${bucket.label}</label>`).join('')}</div>
           <div class="filter-block"><label><input type="checkbox" data-filter-avail ${ui.shop.availableOnly ? 'checked' : ''}/>فقط موجودها</label></div>
+          ${multiLeaf ? '<p class="hint">PRD-048 FLT-03: در Category والد فقط فیلترهای مشترک نمایش داده می‌شوند.</p>' : ''}
           ${filters.filter((field) => ['single', 'multi'].includes(field.dataType) && field.options.length).map((field) => `<div class="filter-block"><b>${escape(field.label)}</b>${field.options.map((option) => `<label><input type="checkbox" data-filter-attr="${field.key}" value="${escape(option)}" ${(ui.shop.attrs[field.key] || []).includes(option) ? 'checked' : ''}/>${escape(option)}</label>`).join('')}</div>`).join('')}
         </aside>
         <div>
@@ -477,11 +480,12 @@ function modalHtml() {
   if (ui.modal === 'brand') return brandModal();
   if (ui.modal === 'product') return productModal();
   if (ui.modal === 'sku') return skuModal();
-  if (ui.modal === 'publish') return confirmModal('انتشار محصول', 'محصول پس از تأیید در فروشگاه، جست‌وجو و Sitemap دیده می‌شود.', 'confirm-publish', 'انتشار');
+  if (ui.modal === 'publish') return publishPreviewModal();
   if (ui.modal === 'unpublish') return confirmModal('غیرفعال‌سازی محصول', 'فروش جدید متوقف می‌شود. سفارش قبلی و نظرهای ثبت‌شده پاک نمی‌شوند.', 'confirm-unpublish', 'غیرفعال شود');
   if (ui.modal === 'seo') return seoModal();
   if (ui.modal === 'links') return linksModal();
   if (ui.modal === 'reject') return rejectModal();
+  if (ui.modal === 'drop-link') return confirmModal('حذف اتصال', 'این اتصال از CMS حذف می‌شود. ادامه می‌دهی؟', 'confirm-drop-link', 'حذف اتصال');
   if (ui.modal === 'decisions') return `<div class="backdrop"><section class="modal decisions" onclick="event.stopPropagation()"><header><div><span>GAPS</span><h2>تصمیم‌های باز Product</h2></div><button class="icon-button" data-action="close">×</button></header><div class="decision-list">${decisions.map(([title, text], index) => `<article><em>۰${index + 1}</em><div><b>${title}</b><p>${text}</p></div><span>باز</span></article>`).join('')}</div><footer><button class="primary" data-action="close">متوجه شدم</button></footer></section></div>`;
   return '';
 }
@@ -552,6 +556,7 @@ function productModal() {
       <label><span>برند</span><select id="product-brand"><option value="">بدون برند</option>${brandsForLeaf(leafId).map((brand) => `<option value="${brand.id}" ${item?.brandId === brand.id ? 'selected' : ''}>${escape(brand.name)}</option>`).join('')}</select></label>
       <label><span>تصویر اصلی</span><input id="product-image" value="${escape(item?.image || '')}" placeholder="شرح یا نام تصویر" /></label>
       <label><span>توضیح</span><textarea id="product-description">${escape(item?.description || '')}</textarea></label>
+      <div class="option-box"><span>Tagهای مارکتینگی (PRD-032)</span><div>${catalog.marketingTags.map((tag) => `<label class="chip-button"><input type="checkbox" data-product-tag value="${tag.id}" ${item?.tags?.includes(tag.id) ? 'checked' : ''}/>${escape(tag.label)}</label>`).join('')}</div></div>
       <div id="attr-fields">${attributeFields(leafId, item)}</div>
       <p class="form-error" id="form-error"></p>
     </div>
@@ -571,6 +576,7 @@ function skuModal() {
   return `<div class="backdrop"><section class="modal wide" onclick="event.stopPropagation()">
     <header><div><span>PRD-047</span><h2>انتخاب ترکیب‌های قابل فروش</h2></div><button class="icon-button" data-action="close">×</button></header>
     <div class="modal-body">
+      <p class="form-note">${fa(combos.length)} ترکیب ممکن — فقط ترکیب‌های انتخاب‌شده به SKU تبدیل می‌شوند.</p>
       ${axes.map((axis) => `<div class="option-box"><span>${escape(axis.label)}</span><div>${axis.options.map((option) => `<label class="chip-button"><input type="checkbox" data-sku-value="${axis.key}" value="${escape(option)}" ${selected[axis.key]?.includes(option) ? 'checked' : ''}/>${escape(option)}</label>`).join('')}</div></div>`).join('')}
       <div class="schema-list" id="sku-combos">${combos.map((combo) => `<label class="combo-row"><input type="checkbox" data-combo="${escape(JSON.stringify(combo))}" checked/><span>${Object.values(combo).join(' · ')}</span></label>`).join('') || '<p>حداقل یک مقدار برای هر محور انتخاب کن.</p>'}</div>
       <p class="form-error" id="form-error"></p>
@@ -596,15 +602,35 @@ function seoModal() {
   </section></div>`;
 }
 
+function publishPreviewModal() {
+  const item = productById(ui.productId);
+  const errors = canPublish(item);
+  return `<div class="backdrop"><section class="modal wide" onclick="event.stopPropagation()">
+    <header><div><span>PRD-032 · PDT-02</span><h2>پیش‌نمایش انتشار</h2></div><button class="icon-button" data-action="close">×</button></header>
+    <div class="modal-body">
+      <div class="preview"><small>خلاصه</small><p><b>${escape(item.title)}</b></p><p>${escape(pathLabel(item.leafId))}</p><p>${fa(item.skus.length)} SKU · ${item.brandId ? escape(brandById(item.brandId)?.name || '') : 'بدون برند'}</p><p>${escape(canonicalPath(item))}</p></div>
+      ${errors.length ? `<div class="delete-warning blocked"><b>انتشار ممکن نیست</b><p>${errors.map(escape).join(' ')}</p></div>` : '<p class="form-note">پس از تأیید، محصول در Shop و جست‌وجوی نمونه دیده می‌شود.</p>'}
+      <p class="form-error" id="form-error"></p>
+    </div>
+    <footer><button class="ghost" data-action="close">انصراف</button>${errors.length ? '' : '<button class="primary" data-action="confirm-publish">تأیید انتشار</button>'}</footer>
+  </section></div>`;
+}
+
 function linksModal() {
   const item = productById(ui.productId);
   const others = catalog.products.filter((entry) => entry.id !== item.id);
+  const pendingAi = (item.aiCrossSell || []).filter((row) => row.status === 'pending');
   return `<div class="backdrop"><section class="modal wide" onclick="event.stopPropagation()">
     <header><div><span>PRD-049</span><h2>محصولات مرتبط</h2></div><button class="icon-button" data-action="close">×</button></header>
     <div class="modal-body">
       <label><span>محصول مقصد</span><select id="link-target">${others.map((entry) => `<option value="${entry.id}">${escape(entry.title)}</option>`).join('')}</select></label>
       <label><span>نوع</span><select id="link-type"><option value="related">مرتبط</option><option value="cross">Cross-sell</option></select></label>
-      <div class="schema-list">${item.links.map((link, index) => `<article><div><b>${escape(productById(link.productId)?.title || '')}</b><small>${link.type === 'related' ? 'مرتبط' : 'Cross-sell'}</small></div><button data-action="drop-link" data-index="${index}">حذف</button></article>`).join('')}</div>
+      <div class="schema-list">${item.links.map((link, index) => `<article><div><b>${escape(productById(link.productId)?.title || '')}</b><small>${link.type === 'related' ? 'مرتبط' : 'Cross-sell'}</small></div><button type="button" class="action-button" data-action="ask-drop-link" data-index="${index}">حذف</button></article>`).join('') || '<p class="empty-copy">اتصال دستی ثبت نشده.</p>'}</div>
+      ${pendingAi.length ? `<div class="validation-box"><b>پیشنهاد AI (REL-03) — در انتظار تأیید</b><div class="schema-list">${pendingAi.map((row) => {
+        const target = productById(row.productId);
+        const ok = target && isPublicProduct(target) && target.skus.some(purchasable);
+        return `<article><div><b>${escape(target?.title || row.productId)}</b><small>امتیاز ${Math.round(row.score * 100)}٪ · ${escape(row.model)}${ok ? '' : ' · غیرقابل تأیید'}</small></div><div class="detail-actions"><button type="button" class="action-button" data-action="approve-ai-cross" data-id="${row.id}" ${ok ? '' : 'disabled'}>تأیید</button><button type="button" class="action-button danger" data-action="reject-ai-cross" data-id="${row.id}">رد</button></div></article>`;
+      }).join('')}</div><p class="hint">پیشنهاد AI بدون تأیید در PDP نمایش داده نمی‌شود.</p></div>` : ''}
       <p class="form-error" id="form-error"></p>
     </div>
     <footer><button class="ghost" data-action="close">بستن</button><button class="primary" data-action="add-link">افزودن اتصال</button></footer>
@@ -752,7 +778,10 @@ function onClick(event, rerender) {
   if (action === 'save-seo') { saveSeo(rerender); return; }
   if (action === 'links-product') { ui.modal = 'links'; rerender(); return; }
   if (action === 'add-link') { addLink(rerender); return; }
-  if (action === 'drop-link') { dropLink(Number(event.target.closest('[data-index]').dataset.index), rerender); return; }
+  if (action === 'ask-drop-link') { ui.dropLinkIndex = Number(event.target.closest('[data-index]').dataset.index); ui.modal = 'drop-link'; rerender(); return; }
+  if (action === 'confirm-drop-link') { dropLink(ui.dropLinkIndex, rerender); ui.modal = 'links'; ui.dropLinkIndex = null; rerender(); return; }
+  if (action === 'approve-ai-cross') { approveAiCross(event.target.closest('[data-id]').dataset.id, rerender); return; }
+  if (action === 'reject-ai-cross') { rejectAiCross(event.target.closest('[data-id]').dataset.id, rerender); return; }
   if (action === 'submit-review') { submitReview(rerender); return; }
   if (action === 'approve-review') { approveReview(event.target.closest('[data-id]').dataset.id, rerender); return; }
   if (action === 'reject-review') { ui.rejectId = event.target.closest('[data-id]').dataset.id; ui.modal = 'reject'; rerender(); return; }
@@ -1052,7 +1081,9 @@ function saveProduct(rerender) {
     image: document.querySelector('#product-image')?.value.trim() || '',
     description: document.querySelector('#product-description')?.value.trim() || '',
     attributes: {},
+    tags: [],
   };
+  document.querySelectorAll('[data-product-tag]:checked').forEach((node) => { payload.tags.push(node.value); });
   document.querySelectorAll('[data-attr]').forEach((node) => { payload.attributes[node.dataset.attr] = node.value.trim(); });
   document.querySelectorAll('[data-attr-bool]').forEach((node) => { payload.attributes[node.dataset.attrBool] = node.checked; });
   document.querySelectorAll('[data-attr-multi]').forEach((node) => {
@@ -1076,7 +1107,7 @@ function saveProduct(rerender) {
     ui.productId = item.id;
   } else {
     const id = `prd-${Date.now().toString(36)}`;
-    catalog.products.push({ ...payload, id, status: 'draft', publishedAt: '', sales: 0, skus: [], links: [], seo: { slug: id, title: '', description: '', index: true, redirects: [] } });
+    catalog.products.push({ ...payload, id, status: 'draft', publishedAt: '', sales: 0, skus: [], links: [], aiCrossSell: [], seo: { slug: id, title: '', description: '', index: true, redirects: [] } });
     ui.productId = id;
     logChange(`ایجاد پیش‌نویس ${title || id}`);
   }
@@ -1165,9 +1196,41 @@ function addLink(rerender) {
 
 function dropLink(index, rerender) {
   const item = productById(ui.productId);
+  const removed = item.links[index];
   item.links.splice(index, 1);
+  logChange(`حذف اتصال ${removed?.type || ''} از ${item.title}`);
   persistCatalog();
-  rerender();
+  toast('اتصال حذف شد', rerender);
+}
+
+function approveAiCross(suggestionId, rerender) {
+  const item = productById(ui.productId);
+  const row = item.aiCrossSell?.find((entry) => entry.id === suggestionId);
+  if (!row || row.status !== 'pending') return;
+  const target = productById(row.productId);
+  if (!target || !isPublicProduct(target) || !target.skus.some(purchasable)) return toast('این پیشنهاد دیگر قابل تأیید نیست.', rerender);
+  if (item.links.some((link) => link.productId === row.productId && link.type === 'cross')) {
+    row.status = 'rejected';
+    row.note = 'تکراری';
+    return toast('اتصال Cross-sell از قبل وجود دارد.', rerender);
+  }
+  const order = item.links.filter((link) => link.type === 'cross').length + 1;
+  item.links.push({ productId: row.productId, type: 'cross', order });
+  row.status = 'approved';
+  logChange(`تأیید Cross-sell AI برای ${item.title}`);
+  persistCatalog();
+  toast('به Cross-sell اضافه شد', rerender);
+}
+
+function rejectAiCross(suggestionId, rerender) {
+  const item = productById(ui.productId);
+  const row = item.aiCrossSell?.find((entry) => entry.id === suggestionId);
+  if (!row) return;
+  row.status = 'rejected';
+  row.note = 'رد توسط کاربر';
+  logChange(`رد پیشنهاد AI Cross-sell (${row.productId})`);
+  persistCatalog();
+  toast('پیشنهاد AI رد شد', rerender);
 }
 
 function submitReview(rerender) {

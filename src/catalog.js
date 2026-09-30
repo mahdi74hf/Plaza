@@ -81,6 +81,11 @@ function seed() {
     },
     products: [
       product('iphone', 'گوشی اپل آیفون ۱۶ پرو', 'Apple iPhone 16 Pro', 'A3293', 'phone', 'apple', 'published', '2026-08-02', 480, {
+        tags: ['new', 'online'],
+        aiCrossSell: [
+          { id: 'ai-iphone-1', productId: 'ipad', score: 0.86, model: 'plaza-demo-v1', status: 'pending', note: '' },
+          { id: 'ai-iphone-2', productId: 'galaxy', score: 0.71, model: 'plaza-demo-v1', status: 'pending', note: '' },
+        ],
         skus: [
           sku('PLAZA-IPHONE-BLK-256', { color: 'مشکی', storage: '۲۵۶ گیگابایت' }, 98_900_000, 6, { compareAt: 109_000_000, reserved: 2, installment: { months: 12, monthly: 9_150_000 } }),
           sku('PLAZA-IPHONE-SLV-256', { color: 'نقره‌ای', storage: '۲۵۶ گیگابایت' }, 99_400_000, 1, { compareAt: 109_000_000, reserved: 1 }),
@@ -115,6 +120,12 @@ function seed() {
     cart: [],
     audit: [],
     searches: [],
+    marketingTags: [
+      { id: 'new', label: 'جدید' },
+      { id: 'sale', label: 'حراج' },
+      { id: 'bundle', label: 'پیشنهاد ویژه' },
+      { id: 'online', label: 'فقط آنلاین' },
+    ],
   };
 }
 
@@ -134,6 +145,8 @@ function product(id, title, titleEn, model, leafId, brandId, status, publishedAt
     attributes: extra.attributes ?? {},
     skus: extra.skus ?? [],
     links: extra.links ?? [],
+    tags: extra.tags ?? [],
+    aiCrossSell: extra.aiCrossSell ?? [],
     seo: {
       slug: id,
       title: '',
@@ -158,6 +171,11 @@ function readCatalog() {
   try {
     const saved = localStorage.getItem(CATALOG_KEY);
     const data = saved ? JSON.parse(saved) : seed();
+    if (!data.marketingTags?.length) data.marketingTags = seed().marketingTags;
+    data.products?.forEach((item) => {
+      if (!item.tags) item.tags = [];
+      if (!item.aiCrossSell) item.aiCrossSell = [];
+    });
     Object.values(data.schemas || {}).forEach((fields) => fields.forEach(normalizeField));
     return data;
   } catch {
@@ -264,6 +282,16 @@ export function isPublicProduct(item) {
 export function contextLeaves(nodeId) {
   if (!nodeId) return publicLeaves();
   return publicLeaves(nodeId);
+}
+
+export function productsOnLeaf(leafId) {
+  return catalog.products.filter((item) => item.leafId === leafId);
+}
+
+export function countProductsUnderNode(nodeId) {
+  if (!nodeId) return catalog.products.length;
+  const leafIds = new Set(contextLeaves(nodeId).map(({ node }) => node.id));
+  return catalog.products.filter((item) => leafIds.has(item.leafId)).length;
 }
 
 export function productMatchesContext(item, nodeId) {
