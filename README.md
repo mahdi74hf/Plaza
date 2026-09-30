@@ -40,6 +40,11 @@ npm install
 npm run dev
 ```
 
+## Design System
+
+UI tokens and component sizing follow **Metronic v9.5 / Plaza Design System** from Figma  
+(`Metronic_v9.5.0` → page **COMPONENTS**). CSS variables live in `src/style.css` (`--ds-*`).
+
 ## Build
 
 ```bash
