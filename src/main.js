@@ -1,6 +1,6 @@
 import './style.css';
 import { applyProductDeepLink, bindProduct, openProductGaps, productContent, productMeta } from './product.js';
-import { countProductsUnderNode, logChange, productsOnLeaf } from './catalog.js';
+import { logChange, productsOnLeaf } from './catalog.js';
 import { countActiveType, countNodes, countType, findNode, getSiblings, persistTree, removeNode, tree } from './tree.js';
 
 const icon = (name) => ({
@@ -64,20 +64,22 @@ function typeLabel(type) {
   return { Vertical: 'Vertical', Category: 'Category', SubCategory: 'SubCategory', LeafCat: 'LeafCat' }[type];
 }
 
-function renderTree(nodes, depth = 0) {
+function renderTree(nodes, depth = 0, parents = []) {
   const term = state.search.trim();
   return nodes.map(node => {
     const hasChildren = node.children?.length;
     const expanded = state.expanded.has(node.id) || term;
     const matches = !term || node.name.includes(term) || node.type.toLowerCase().includes(term.toLowerCase());
-    const childHtml = hasChildren && expanded ? renderTree(node.children, depth + 1) : '';
+    const childHtml = hasChildren && expanded ? renderTree(node.children, depth + 1, [...parents, node]) : '';
+    const effectiveActive = node.status !== 'inactive' && parents.every((parent) => parent.status !== 'inactive');
+    const statusLabel = node.status === 'inactive' ? 'غیرفعال' : effectiveActive ? 'فعال' : 'غیرفعال مؤثر';
     if (term && !matches && !childHtml) return '';
     return `<div class="branch">
       <button class="tree-row ${state.selected === node.id ? 'selected' : ''}" data-node="${node.id}" style="--depth:${depth}">
         <span class="toggle ${hasChildren ? '' : 'empty'}" data-toggle="${node.id}">${hasChildren ? icon('chevron') : ''}</span>
         <span class="type-dot ${node.type.toLowerCase()}"></span>
         <span class="node-name"><b>${escapeHtml(node.name)}</b><small>${typeLabel(node.type)}</small></span>
-        <span class="node-status ${node.status === 'inactive' ? 'inactive' : ''}">${node.status === 'inactive' ? 'غیرفعال' : 'فعال'}</span>
+        <span class="node-status ${effectiveActive ? '' : 'inactive'}">${statusLabel}</span>
       </button>
       ${childHtml ? `<div>${childHtml}</div>` : ''}
     </div>`;
@@ -88,26 +90,53 @@ function detailPanel() {
   const { node, parents } = findNode(state.selected);
   const path = [...parents, node];
   const allowed = allowedChildren(node.type);
+  const effectiveActive = node.status !== 'inactive' && parents.every((parent) => parent.status !== 'inactive');
+  const parentBlocked = parents.some((parent) => parent.status === 'inactive');
+  const statusLabel = node.status === 'inactive' ? 'غیرفعال' : effectiveActive ? 'فعال' : 'غیرفعال مؤثر';
   return `<section class="card detail-card">
     <div class="detail-head">
-      <div><span class="type-pill ${node.type.toLowerCase()}">${node.type}</span><span class="active-pill ${node.status === 'inactive' ? 'inactive' : ''}"><i></i>${node.status === 'inactive' ? 'غیرفعال' : 'فعال'}</span><h2>${escapeHtml(node.name)}</h2><p>شناسه: ${node.id}</p></div>
-      <div class="detail-actions"><button class="action-button" data-action="edit">ویرایش</button><button class="action-button danger" data-action="delete">حذف</button></div>
+      <div><span class="type-pill ${node.type.toLowerCase()}">${node.type}</span><span class="active-pill ${effectiveActive ? '' : 'inactive'}"><i></i>${statusLabel}</span><h2>${escapeHtml(node.name)}</h2><p>شناسه: ${node.id}</p></div>
+      <div class="detail-actions">
+        <button class="action-button" data-action="edit">ویرایش</button>
+        ${node.status === 'inactive'
+          ? `<button class="action-button success" data-action="activate" ${parentBlocked ? 'title="ابتدا Parent را فعال کن"' : ''}>فعال‌سازی</button>`
+          : `<button class="action-button danger" data-action="deactivate">غیرفعال‌سازی</button>`}
+        <button class="action-button danger" data-action="delete">حذف</button>
+      </div>
     </div>
     <div class="path-box"><span>مسیر کامل</span><div>${path.map((item, index) => `<b class="${index === path.length - 1 ? 'current' : ''}">${escapeHtml(item.name)}</b>${index < path.length - 1 ? '<i>/</i>' : ''}`).join('')}</div></div>
     <div class="detail-grid">
       <div><span>نوع نود</span><b>${node.type}</b></div>
       <div><span>Parent</span><b>${parents.at(-1)?.name || 'ندارد'}</b></div>
-      <div><span>وضعیت</span><b>${node.status === 'inactive' ? 'غیرفعال' : 'فعال'}</b></div>
+      <div><span>وضعیت ذخیره‌شده</span><b>${node.status === 'inactive' ? 'غیرفعال' : 'فعال'}</b></div>
+      <div><span>وضعیت مؤثر</span><b>${effectiveActive ? 'فعال' : 'غیرفعال'}</b></div>
       <div><span>Child مجاز</span><b>${allowed.length ? allowed.join(' / ') : 'ندارد'}</b></div>
     </div>
-    ${node.type === 'LeafCat' && node.status !== 'inactive' ? `<div class="leaf-note">${icon('check')}<div><b>این نود برای اتصال Product معتبر است</b><p>فقط LeafCat فعال می‌تواند به‌عنوان دسته نهایی محصول انتخاب شود.</p></div></div>` : ''}
+    ${parentBlocked ? `<div class="delete-warning blocked"><b>Parent غیرفعال است</b><p>${node.status === 'active' ? 'این نود با وجود وضعیت ذخیره‌شده «فعال»، تا فعال‌شدن مسیر بالادست غیرفعال مؤثر باقی می‌ماند.' : 'برای فعال‌سازی این نود، ابتدا مسیر بالادست را فعال کن.'}</p></div>` : ''}
+    ${node.type === 'LeafCat' && effectiveActive ? `<div class="leaf-note">${icon('check')}<div><b>این نود برای اتصال Product معتبر است</b><p>فقط LeafCat فعال با تمام Parentهای فعال می‌تواند Category نهایی Product باشد.</p></div></div>` : ''}
     <div class="rule-list"><h3>قواعد این نود</h3>
       <div>${icon('check')}<span>${node.type === 'LeafCat' ? 'امکان افزودن Child ندارد.' : `فقط ${allowed.join(' یا ')} زیر این نود ساخته می‌شود.`}</span></div>
       <div>${icon('check')}<span>نام تکراری هم‌نوع زیر Parent یکسان پذیرفته نمی‌شود.</span></div>
       <div>${icon('check')}<span>ساخت نود باعث نمایش خودکار آن در سایت نمی‌شود.</span></div>
     </div>
-    ${allowed.length && node.status !== 'inactive' ? `<button class="secondary add-child" data-action="add-child">${icon('plus')} افزودن Child به این نود</button>` : ''}
+    ${allowed.length && effectiveActive ? `<button class="secondary add-child" data-action="add-child">${icon('plus')} افزودن Child به این نود</button>` : ''}
   </section>`;
+}
+
+function branchImpact(node) {
+  let descendants = 0;
+  let leafCount = node.type === 'LeafCat' ? 1 : 0;
+  let productCount = node.type === 'LeafCat' ? productsOnLeaf(node.id).length : 0;
+  const visit = (children = []) => children.forEach((child) => {
+    descendants += 1;
+    if (child.type === 'LeafCat') {
+      leafCount += 1;
+      productCount += productsOnLeaf(child.id).length;
+    }
+    visit(child.children);
+  });
+  visit(node.children);
+  return { descendants, leafCount, productCount };
 }
 
 function createModal() {
@@ -158,13 +187,30 @@ function deleteModal() {
 
 function deactivateModal() {
   const { node } = findNode(state.selected);
-  const affected = countProductsUnderNode(node.id);
+  const impact = branchImpact(node);
   return `<div class="backdrop" data-action="close"><section class="modal confirm-modal" onclick="event.stopPropagation()">
     <header><div><span>PRD-043 · CAT-04</span><h2>غیرفعال‌سازی «${escapeHtml(node.name)}»</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
     <div class="modal-body">
-      <div class="delete-warning"><b>اثر تغییر</b><p>تا ${affected} محصول از Shop و Discovery این مسیر خارج می‌شوند. Product در CMS حذف یا Unpublish نمی‌شود.</p><p>Childها در Tree همان وضعیت ذخیره‌شده را نگه می‌دارند.</p></div>
+      <div class="impact-grid"><div><span>سطح</span><b>${node.type}</b></div><div><span>زیرنود متاثر</span><b>${impact.descendants}</b></div><div><span>LeafCat متاثر</span><b>${impact.leafCount}</b></div><div><span>Product متاثر</span><b>${impact.productCount}</b></div></div>
+      <div class="delete-warning"><b>اثر غیرفعال‌سازی</b><p>این مسیر از Shop، منو، PLP، Search و Product Discovery خارج می‌شود. Productها در CMS حذف یا Unpublish نمی‌شوند.</p><p>Childها وضعیت ذخیره‌شده خود را نگه می‌دارند، اما تا فعال‌شدن Parent غیرفعال مؤثر هستند.</p></div>
     </div>
     <footer><button class="ghost" data-action="close">انصراف</button><button class="delete-button" data-action="confirm-deactivate">تأیید غیرفعال‌سازی</button></footer>
+  </section></div>`;
+}
+
+function activateModal() {
+  const { node, parents } = findNode(state.selected);
+  const blocker = [...parents].reverse().find((parent) => parent.status === 'inactive');
+  const impact = branchImpact(node);
+  return `<div class="backdrop" data-action="close"><section class="modal confirm-modal" onclick="event.stopPropagation()">
+    <header><div><span>PRD-043 · CAT-04</span><h2>فعال‌سازی «${escapeHtml(node.name)}»</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
+    <div class="modal-body">
+      ${blocker
+        ? `<div class="delete-warning blocked"><b>فعال‌سازی ممکن نیست</b><p>ابتدا Parent غیرفعال «${escapeHtml(blocker.name)}» را فعال کن.</p></div>`
+        : `<div class="impact-grid"><div><span>سطح</span><b>${node.type}</b></div><div><span>زیرنود</span><b>${impact.descendants}</b></div><div><span>LeafCat مسیر</span><b>${impact.leafCount}</b></div><div><span>Product مرتبط</span><b>${impact.productCount}</b></div></div>
+          <div class="leaf-note"><div><b>اثر فعال‌سازی</b><p>نود دوباره در مسیرهای مجاز Shop و Discovery قابل استفاده می‌شود. فقط Childهایی که وضعیت ذخیره‌شده فعال دارند، فعال مؤثر می‌شوند.</p></div></div>`}
+    </div>
+    <footer><button class="ghost" data-action="close">انصراف</button>${blocker ? '' : '<button class="primary" data-action="confirm-activate">تأیید فعال‌سازی</button>'}</footer>
   </section></div>`;
 }
 
@@ -210,7 +256,7 @@ function render() {
         <section class="scope"><div>${icon('info')}<span><b>ذخیره‌سازی Prototype</b><small>عملیات ایجاد، مشاهده، ویرایش و حذف در localStorage مرورگر ذخیره می‌شود؛ SEO و نمایش سایت در PRDهای بعدی هستند.</small></span></div><button data-action="decisions">مشاهده کمبودهای PRD</button></section>`}
       </div>
     </main>
-    ${product ? '' : (state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'deactivate' ? deactivateModal() : state.modal === 'decisions' ? decisionsModal() : '')}
+    ${product ? '' : (state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'deactivate' ? deactivateModal() : state.modal === 'activate' ? activateModal() : state.modal === 'decisions' ? decisionsModal() : '')}
     ${!product && state.toast ? `<div class="toast">${icon('check')} ${state.toast}</div>` : ''}
   </div>`;
   bindEvents();
@@ -276,6 +322,16 @@ function bindEvents() {
     if (action === 'add-root') state.modal = 'root';
     if (action === 'add-child') state.modal = 'create';
     if (action === 'edit') state.modal = 'edit';
+    if (action === 'deactivate') {
+      const found = findNode(state.selected);
+      state.pendingEdit = { title: found.node.name, status: 'inactive' };
+      state.modal = 'deactivate';
+    }
+    if (action === 'activate') {
+      const found = findNode(state.selected);
+      state.pendingEdit = { title: found.node.name, status: 'active' };
+      state.modal = 'activate';
+    }
     if (action === 'delete') state.modal = 'delete';
     if (action === 'decisions') state.modal = 'decisions';
     if (action === 'close') state.modal = null;
@@ -329,6 +385,12 @@ function bindEvents() {
         render();
         return;
       }
+      if (status === 'active' && found.node.status === 'inactive') {
+        state.pendingEdit = { title, status };
+        state.modal = 'activate';
+        render();
+        return;
+      }
       found.node.name = title;
       found.node.status = status;
       persistTree();
@@ -352,6 +414,28 @@ function bindEvents() {
       state.pendingEdit = null;
       state.modal = null;
       showToast(`«${pending.title}» غیرفعال شد`);
+      return;
+    }
+    if (action === 'confirm-activate') {
+      const found = findNode(state.selected);
+      const pending = state.pendingEdit;
+      if (!found || !pending) {
+        state.modal = null;
+        render();
+        return;
+      }
+      if (found.parents.some((item) => item.status === 'inactive')) {
+        state.modal = 'activate';
+        render();
+        return;
+      }
+      found.node.name = pending.title;
+      found.node.status = 'active';
+      persistTree();
+      logChange(`CAT Tree: فعال‌سازی «${pending.title}»`);
+      state.pendingEdit = null;
+      state.modal = null;
+      showToast(`«${pending.title}» فعال شد`);
       return;
     }
     if (action === 'confirm-delete') {

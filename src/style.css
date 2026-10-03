@@ -587,6 +587,11 @@ svg {
   border-color: #efcbc5;
   color: #ad4437;
 }
+.action-button.success {
+  border-color: #b8ddc5;
+  color: var(--green);
+  background: var(--ds-success-bg);
+}
 .detail-head h2 {
   font-size: 21px;
   margin: 8px 0 0;
@@ -941,6 +946,28 @@ svg {
   color: inherit;
   font-size: 9px;
   line-height: 1.8;
+}
+.impact-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.impact-grid > div {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-page);
+}
+.impact-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: var(--ds-text-xs);
+}
+.impact-grid b {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--ds-text-sm);
 }
 .decision-list {
   padding: 8px 20px 16px;
@@ -1559,6 +1586,9 @@ svg {
   grid-template-columns: 1fr;
 }
 @media (max-width: 900px) {
+  .impact-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .shop-layout-fields,
   .shop-layout-fields.group-fields {
     grid-template-columns: 1fr;
