@@ -62,6 +62,8 @@ function seed() {
       { id: 'apple', name: 'اپل', nameEn: 'Apple', status: 'active', leafIds: ['phone', 'tablet'] },
       { id: 'samsung', name: 'سامسونگ', nameEn: 'Samsung', status: 'active', leafIds: [] },
       { id: 'xiaomi', name: 'شیائومی', nameEn: 'Xiaomi', status: 'active', leafIds: ['phone'] },
+      { id: 'barfab', name: 'برفاب', nameEn: 'Barfab', status: 'active', leafIds: ['electric-heater', 'gas-heater'] },
+      { id: 'energy', name: 'انرژی', nameEn: 'Energy', status: 'active', leafIds: ['gas-heater'] },
       { id: 'generic', name: 'متفرقه', nameEn: '', status: 'inactive', leafIds: [] },
     ],
     schemas: {
@@ -78,6 +80,8 @@ function seed() {
         attr('storage', { variant: true, required: true }),
       ],
       router: [attr('connection', { variant: false, required: false, filterable: true })],
+      'electric-heater': [],
+      'gas-heater': [],
     },
     products: [
       product('iphone', 'گوشی اپل آیفون ۱۶ پرو', 'Apple iPhone 16 Pro', 'A3293', 'phone', 'apple', 'published', '2026-08-02', 480, {
@@ -110,6 +114,15 @@ function seed() {
       product('router', 'مودم روتر بی‌سیم', 'Wireless Router', 'RX2', 'router', null, 'published', '2026-03-01', 40, {
         skus: [sku('PLAZA-ROUTER-BASE', {}, 3_200_000, 0, { reserved: 0 })],
         attributes: { connection: 'بی‌سیم' },
+      }),
+      product('barfab-electric-heater', 'بخاری برقی برفاب', 'Barfab Electric Heater', 'QH-3000', 'electric-heater', 'barfab', 'published', '2026-09-25', 145, {
+        skus: [sku('PLAZA-BARFAB-QH3000', {}, 5_980_000, 9)],
+      }),
+      product('barfab-gas-heater', 'بخاری گازی برفاب', 'Barfab Gas Heater', 'BF-15', 'gas-heater', 'barfab', 'published', '2026-09-20', 110, {
+        skus: [sku('PLAZA-BARFAB-BF15', {}, 13_400_000, 5)],
+      }),
+      product('energy-gas-heater', 'بخاری گازی انرژی', 'Energy Gas Heater', 'GH-0618', 'gas-heater', 'energy', 'published', '2026-09-18', 95, {
+        skus: [sku('PLAZA-ENERGY-GH0618', {}, 15_700_000, 4)],
       }),
       product('draft-phone', 'گوشی پیش‌نویس', '', '', 'phone', null, 'draft', '', 0, { image: '', skus: [] }),
     ],
@@ -171,6 +184,7 @@ function readCatalog() {
   try {
     const saved = localStorage.getItem(CATALOG_KEY);
     const data = saved ? JSON.parse(saved) : seed();
+    ensureShopDemoCatalog(data);
     if (!data.marketingTags?.length) data.marketingTags = seed().marketingTags;
     data.products?.forEach((item) => {
       if (!item.tags) item.tags = [];
@@ -180,6 +194,23 @@ function readCatalog() {
     return data;
   } catch {
     return seed();
+  }
+}
+
+function ensureShopDemoCatalog(data) {
+  const fresh = seed();
+  for (const id of ['barfab', 'energy']) {
+    if (!data.brands.some((brand) => brand.id === id)) {
+      data.brands.push(structuredClone(fresh.brands.find((brand) => brand.id === id)));
+    }
+  }
+  for (const leafId of ['electric-heater', 'gas-heater']) {
+    data.schemas[leafId] ||= [];
+  }
+  for (const id of ['barfab-electric-heater', 'barfab-gas-heater', 'energy-gas-heater']) {
+    if (!data.products.some((item) => item.id === id)) {
+      data.products.push(structuredClone(fresh.products.find((item) => item.id === id)));
+    }
   }
 }
 

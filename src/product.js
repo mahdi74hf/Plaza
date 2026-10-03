@@ -51,6 +51,7 @@ import {
   selectedJob,
   crawlerState as crawlerUi,
 } from './crawler.js';
+import { handleShopLayoutChange, handleShopLayoutClick, shopLayoutView } from './shop-layout.js';
 import { findNode, pathLabel, walk } from './tree.js';
 
 const ui = {
@@ -84,6 +85,8 @@ const ui = {
 };
 
 const tabs = [
+  ['shop-layout', 'چیدمان Shop', 'PRD-055'],
+  ['shop', 'پیش‌نمایش PLP', 'PRD-054'],
   ['schema', 'ویژگی', 'PRD-044'],
   ['brands', 'برند', 'PRD-046'],
   ['variants', 'واریانت', 'PRD-047'],
@@ -111,6 +114,16 @@ export function productMeta() {
 export function applyProductDeepLink(params) {
   const tab = params.get('tab');
   if (tab && tabs.some(([id]) => id === tab)) ui.tab = tab;
+  if (ui.tab === 'shop') {
+    const nodeId = params.get('node');
+    if (nodeId && findNode(nodeId)) ui.shop.nodeId = nodeId;
+    const brandId = params.get('brand');
+    ui.shop.brands = brandId && brandById(brandId) ? [brandId] : [];
+    ui.shop.query = '';
+    ui.shop.q = '';
+    ui.shop.view = 'list';
+    ui.shop.page = 1;
+  }
   if (ui.tab !== 'crawler') return;
   const crawler = params.get('crawler');
   if (crawler === 'wizard') openCrawlerDemoView('wizard');
@@ -139,7 +152,7 @@ export function productContent(icon) {
       ${headAction(icon)}
     </div>
     <div class="prd-tabs">${tabs.map(([id, label, code]) => `<button type="button" data-tab="${id}" class="${ui.tab === id ? 'active' : ''}">${label}<small>${code}</small></button>`).join('')}</div>
-    ${ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : productsView()}
+    ${ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'shop' ? shopView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : productsView()}
     <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>ویژگی LeafCat، برند، واریانت و محصول در localStorage همین مرورگر می‌مانند.</small></span></div></section>
     ${modalHtml()}
     ${ui.toast ? `<div class="toast">${icon('check')} ${escape(ui.toast)}</div>` : ''}
@@ -148,12 +161,14 @@ export function productContent(icon) {
 
 function heading() {
   if (ui.tab === 'crawler') return crawlerHeading();
-  return { schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ' }[ui.tab] || 'محصولات کاتالوگ';
+  return { 'shop-layout': 'چیدمان منعطف دسته‌بندی‌های Shop', shop: 'پیش‌نمایش PLP مقصد', schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ' }[ui.tab] || 'محصولات کاتالوگ';
 }
 
 function subhead() {
   if (ui.tab === 'crawler') return crawlerSubhead();
   return {
+    'shop-layout': 'ساختار سه‌سطحی: Group بدون لینک، Itemهای سطح دوم و سوم متصل به PLP',
+    shop: 'مقصد واقعی لینک‌های چیدمان Shop براساس Context و Filter انتخاب‌شده',
     schema: 'برای هر LeafCat ویژگی بساز و نوع آن را مشخص کن؛ مثلاً حافظه رم از جنس عدد',
     brands: 'ایجاد برند، محدودکردن آن به LeafCat و جلوگیری از غیرفعال‌سازی برند در حال استفاده',
     variants: 'حداکثر دو محور Variant از ویژگی‌های انتخابی همان LeafCat',
@@ -754,6 +769,7 @@ function onClick(event, rerender) {
   if (modal && actionHost && !modal.contains(actionHost)) return;
   const action = actionHost?.dataset.action;
   if (!action) return;
+  if (handleShopLayoutClick(action, actionHost, rerender)) return;
   if (action === 'close') { ui.modal = null; rerender(); return; }
   if (action === 'new-brand') { ui.editingId = null; ui.modal = 'brand'; rerender(); return; }
   if (action === 'edit-brand') { ui.editingId = ui.brandId; ui.modal = 'brand'; rerender(); return; }
@@ -869,6 +885,7 @@ function onClick(event, rerender) {
 
 function onChange(event, rerender) {
   const target = event.target;
+  if (handleShopLayoutChange(target, rerender)) return;
   if (target.dataset.field === 'customer') { ui.customerId = target.value; rerender(); return; }
   if (target.id === 'attr-leaf' || target.id === 'attr-type') return;
   if (target.id === 'product-leaf') {

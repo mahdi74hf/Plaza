@@ -16,7 +16,12 @@ export const defaultTree = [
     ]},
   ]},
   { id: 'home', name: 'خانه و آشپزخانه', type: 'Vertical', status: 'active', children: [
-    { id: 'appliance', name: 'لوازم خانگی', type: 'Category', status: 'active' },
+    { id: 'appliance', name: 'لوازم خانگی', type: 'Category', status: 'active', children: [
+      { id: 'heating', name: 'لوازم گرمایشی', type: 'SubCategory', status: 'active', children: [
+        { id: 'electric-heater', name: 'بخاری برقی', type: 'LeafCat', status: 'active' },
+        { id: 'gas-heater', name: 'بخاری گازی', type: 'LeafCat', status: 'active' },
+      ]},
+    ]},
   ]},
 ];
 
@@ -25,10 +30,35 @@ export let tree = loadTree();
 export function loadTree() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : structuredClone(defaultTree);
+    const data = saved ? JSON.parse(saved) : structuredClone(defaultTree);
+    ensureShopDemoNodes(data);
+    return data;
   } catch {
     return structuredClone(defaultTree);
   }
+}
+
+function ensureShopDemoNodes(nodes) {
+  const home = nodes.find((node) => node.id === 'home');
+  if (!home) return;
+  home.children ||= [];
+  let appliance = home.children.find((node) => node.id === 'appliance');
+  if (!appliance) {
+    appliance = { id: 'appliance', name: 'لوازم خانگی', type: 'Category', status: 'active', children: [] };
+    home.children.push(appliance);
+  }
+  appliance.children ||= [];
+  if (appliance.children.some((node) => node.id === 'heating')) return;
+  appliance.children.push({
+    id: 'heating',
+    name: 'لوازم گرمایشی',
+    type: 'SubCategory',
+    status: 'active',
+    children: [
+      { id: 'electric-heater', name: 'بخاری برقی', type: 'LeafCat', status: 'active' },
+      { id: 'gas-heater', name: 'بخاری گازی', type: 'LeafCat', status: 'active' },
+    ],
+  });
 }
 
 export function persistTree() {

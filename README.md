@@ -11,6 +11,12 @@
 - **PRD-032 v0.4**: Tag مارکتینgi، پیش‌نمایش انتشار
 - **PRD-049**: تأیید/رد Cross-sell AI (REL-03)، حذف اتصال با تأیید
 - **PRD-048 FLT-03**: فیلتر مشترک در Category والد (Shop نمونه)
+- **PRD-055 v0.3**: چیدمان منعطف سه‌سطحی Shop؛ سطح اول بدون لینک و سطح دوم/سوم متصل به PLP و Filter برند
+
+### لینک دمو PRD-055
+
+- ویرایش چیدمان: `?screen=product&tab=shop-layout`
+- نمونه مقصد PLP: `?screen=product&tab=shop&node=electric-heater&brand=barfab`
 
 ### لینک دمو PRD-066 (پس از Deploy)
 
