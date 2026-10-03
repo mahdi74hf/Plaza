@@ -61,32 +61,11 @@ const ui = {
   productId: 'iphone',
   modal: null,
   toast: '',
-  shop: {
-    nodeId: 'phone',
-    q: '',
-    query: '',
-    brands: [],
-    price: '',
-    availableOnly: false,
-    attrs: {},
-    sort: 'bestseller',
-    page: 1,
-    view: 'list',
-    productId: null,
-    skuId: null,
-    offer: 'cash',
-    compare: [],
-    diffOnly: false,
-    notice: '',
-    error: false,
-    listKey: '',
-  },
   customerId: 'sara',
 };
 
 const tabs = [
   ['shop-layout', 'چیدمان Shop', 'PRD-055'],
-  ['shop', 'پیش‌نمایش PLP', 'PRD-054'],
   ['schema', 'ویژگی', 'PRD-044'],
   ['brands', 'برند', 'PRD-046'],
   ['variants', 'واریانت', 'PRD-047'],
@@ -114,16 +93,6 @@ export function productMeta() {
 export function applyProductDeepLink(params) {
   const tab = params.get('tab');
   if (tab && tabs.some(([id]) => id === tab)) ui.tab = tab;
-  if (ui.tab === 'shop') {
-    const nodeId = params.get('node');
-    if (nodeId && findNode(nodeId)) ui.shop.nodeId = nodeId;
-    const brandId = params.get('brand');
-    ui.shop.brands = brandId && brandById(brandId) ? [brandId] : [];
-    ui.shop.query = '';
-    ui.shop.q = '';
-    ui.shop.view = 'list';
-    ui.shop.page = 1;
-  }
   if (ui.tab !== 'crawler') return;
   const crawler = params.get('crawler');
   if (crawler === 'wizard') openCrawlerDemoView('wizard');
@@ -152,7 +121,7 @@ export function productContent(icon) {
       ${headAction(icon)}
     </div>
     <div class="prd-tabs">${tabs.map(([id, label, code]) => `<button type="button" data-tab="${id}" class="${ui.tab === id ? 'active' : ''}">${label}<small>${code}</small></button>`).join('')}</div>
-    ${ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'shop' ? shopView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : productsView()}
+    ${ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : productsView()}
     <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>ویژگی LeafCat، برند، واریانت و محصول در localStorage همین مرورگر می‌مانند.</small></span></div></section>
     ${modalHtml()}
     ${ui.toast ? `<div class="toast">${icon('check')} ${escape(ui.toast)}</div>` : ''}
@@ -161,14 +130,13 @@ export function productContent(icon) {
 
 function heading() {
   if (ui.tab === 'crawler') return crawlerHeading();
-  return { 'shop-layout': 'چیدمان منعطف دسته‌بندی‌های Shop', shop: 'پیش‌نمایش PLP مقصد', schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ' }[ui.tab] || 'محصولات کاتالوگ';
+  return { 'shop-layout': 'چیدمان منعطف دسته‌بندی‌های Shop', schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ' }[ui.tab] || 'محصولات کاتالوگ';
 }
 
 function subhead() {
   if (ui.tab === 'crawler') return crawlerSubhead();
   return {
     'shop-layout': 'ساختار سه‌سطحی: Group بدون لینک، Itemهای سطح دوم و سوم متصل به PLP',
-    shop: 'مقصد واقعی لینک‌های چیدمان Shop براساس Context و Filter انتخاب‌شده',
     schema: 'برای هر LeafCat ویژگی بساز و نوع آن را مشخص کن؛ مثلاً حافظه رم از جنس عدد',
     brands: 'ایجاد برند، محدودکردن آن به LeafCat و جلوگیری از غیرفعال‌سازی برند در حال استفاده',
     variants: 'حداکثر دو محور Variant از ویژگی‌های انتخابی همان LeafCat',
@@ -321,68 +289,8 @@ function reviewsView() {
   </div>`;
 }
 
-function shopView() {
-  ui.shop.view = 'list';
-  return plpView();
-}
 
-function plpView() {
-  const listing = runShop();
-  const multiLeaf = listing.leafIds.length > 1;
-  const filters = listing.leafIds.length === 1 ? schemaOf(listing.leafIds[0]).filter((item) => item.active && item.filterable) : sharedFilters(listing.leafIds);
-  const brandOptions = catalog.brands.filter((brand) => listing.unfiltered.some((item) => item.brandId === brand.id));
-  return `<section class="shop-frame">
-    <div class="shop-bar"><label class="search">${shopIcon()}<input id="shop-search" value="${escape(ui.shop.q)}" placeholder="نام محصول، برند یا مدل" /></label><button class="primary" data-action="run-search">جست‌وجو</button></div>
-    <div class="shop-context">${shopNodes().map((node) => `<button class="chip-button ${ui.shop.nodeId === node.id && !ui.shop.query ? 'active' : ''}" data-shop-node="${node.id}">${escape(node.name)}</button>`).join('')}</div>
-    ${ui.shop.error ? `<div class="delete-warning"><b>فهرست بارگذاری نشد</b><p>زمینه همین صفحه حفظ شده است.</p><button class="primary" data-action="retry-shop">تلاش دوباره</button></div>` : listing.kind === 'prompt' ? `<div class="empty-panel"><b>عبارت جست‌وجو را بنویس</b><p>جست‌وجوی خالی اجرا نمی‌شود.</p></div>` : `
-      <div class="plp-head"><div><h2>${escape(listing.title)}</h2><p>${escape(listing.note)}</p></div><b>${fa(listing.items.length)} کالا</b></div>
-      ${chips().length ? `<div class="chip-row">${chips().map((chip) => `<button data-clear="${chip.id}">${escape(chip.label)} ×</button>`).join('')}<button data-action="clear-filters">پاک کردن فیلترها</button></div>` : ''}
-      <div class="plp-layout">
-        <aside>
-          <div class="filter-block"><b>برند</b>${brandOptions.map((brand) => `<label><input type="checkbox" data-filter-brand="${brand.id}" ${ui.shop.brands.includes(brand.id) ? 'checked' : ''}/>${escape(brand.name)}</label>`).join('') || '<small>برندی در این نتیجه نیست.</small>'}</div>
-          <div class="filter-block"><b>قیمت</b>${PRICE_BUCKETS.map((bucket) => `<label><input type="radio" name="price" data-filter-price="${bucket.id}" ${ui.shop.price === bucket.id ? 'checked' : ''}/>${bucket.label}</label>`).join('')}</div>
-          <div class="filter-block"><label><input type="checkbox" data-filter-avail ${ui.shop.availableOnly ? 'checked' : ''}/>فقط موجودها</label></div>
-          ${multiLeaf ? '<p class="hint">PRD-048 FLT-03: در Category والد فقط فیلترهای مشترک نمایش داده می‌شوند.</p>' : ''}
-          ${filters.filter((field) => ['single', 'multi'].includes(field.dataType) && field.options.length).map((field) => `<div class="filter-block"><b>${escape(field.label)}</b>${field.options.map((option) => `<label><input type="checkbox" data-filter-attr="${field.key}" value="${escape(option)}" ${(ui.shop.attrs[field.key] || []).includes(option) ? 'checked' : ''}/>${escape(option)}</label>`).join('')}</div>`).join('')}
-        </aside>
-        <div>
-          ${listing.items.length ? `<div class="card-grid">${listing.pageItems.map((item) => cardHtml(item)).join('')}</div>` : `<div class="empty-panel"><b>محصولی با این شرایط نیست</b><p>${ui.shop.query ? 'عبارت را عوض کن یا به فروشگاه برگرد.' : 'فیلترها را کم کن.'}</p></div>`}
-          ${listing.pages > 1 ? `<div class="pager">${Array.from({ length: listing.pages }, (_, index) => `<button data-page="${index + 1}" class="${listing.page === index + 1 ? 'active' : ''}">${fa(index + 1)}</button>`).join('')}</div>` : ''}
-        </div>
-      </div>`}
-    <button class="text-button" data-action="toggle-error">${ui.shop.error ? 'بستن حالت خطا' : 'شبیه‌سازی خطای بارگذاری'}</button>
-  </section>`;
-}
 
-function pdpView() {
-  const item = productById(ui.shop.productId);
-  if (!item || !isPublicProduct(item)) return `<div class="empty-panel"><b>این محصول در سایت در دسترس نیست</b><button data-action="back-list">بازگشت به فهرست</button></div>`;
-  const sku = item.skus.find((entry) => entry.code === ui.shop.skuId) || displaySku(item) || item.skus[0];
-  ui.shop.skuId = sku?.code || null;
-  const axes = variantAxes(item.leafId);
-  const rating = ratingOf(item.id);
-  const reviews = catalog.reviews.filter((review) => review.productId === item.id).map(publicReview).filter(Boolean);
-  return `<section class="shop-frame">
-    <button class="text-button" data-action="back-list">بازگشت به فهرست</button>
-    <p class="crumb">${escape(pathLabel(item.leafId))}</p>
-    <div class="pdp-grid">
-      <div class="art">${escape(item.image || item.title)}</div>
-      <div>
-        <h2>${escape(item.title)}</h2>
-        <p>${escape(item.titleEn)} ${brandById(item.brandId) ? `· ${escape(brandById(item.brandId).name)}` : ''}</p>
-        ${rating ? `<p class="rating">${fa(rating.average.toFixed(1))} از ${fa(rating.count)} نظر تأییدشده</p>` : '<p class="rating">هنوز نظر تأییدشده‌ای نیست</p>'}
-        ${axes.map((axis) => `<div class="option-box"><span>${escape(axis.label)}</span><div>${axis.options.filter((option) => item.skus.some((entry) => entry.combo?.[axis.key] === option)).map((option) => `<button class="chip-button ${sku?.combo?.[axis.key] === option ? 'active' : ''}" data-axis="${axis.key}" data-value="${escape(option)}">${escape(option)}</button>`).join('')}</div></div>`).join('')}
-        ${sku ? offerBox(item, sku) : '<p>SKU معتبری نیست.</p>'}
-        <div class="detail-actions spread"><button class="secondary" data-action="wish">علاقه‌مندی</button><button class="secondary" data-action="add-compare" data-id="${item.id}">افزودن به مقایسه</button></div>
-        ${ui.shop.notice ? `<p class="form-error">${escape(ui.shop.notice)}</p>` : ''}
-      </div>
-    </div>
-    <div class="info-grid"><div><b>شرایط بازگشت</b><p>${RETURN_POLICY}</p></div><div><b>SEO</b><p>${escape(seoTitle(item))}</p><small>${escape(canonicalPath(item))} · ${item.seo.index ? 'Index' : 'Noindex'}</small></div></div>
-    ${rail('محصولات مرتبط', linksOf(item, 'related'))}
-    ${rail('Cross-sell', linksOf(item, 'cross'), true)}
-    <div class="review-public"><h3>نظرهای تأییدشده</h3>${reviews.length ? reviews.map((review) => `<article><b>${escape(customerById(review.customerId)?.name || '')} · ${fa(review.score)}</b><p>${escape(review.text)}</p></article>`).join('') : '<p>نظری برای نمایش نیست.</p>'}</div>
-  </section>`;
-}
 
 function compareView() {
   const items = ui.shop.compare.map(productById).filter((item) => item && isPublicProduct(item));
@@ -712,16 +620,6 @@ export function bindProduct(rerender) {
   if (!root) return;
   root.addEventListener('click', (event) => onClick(event, rerender), true);
   root.addEventListener('change', (event) => onChange(event, rerender));
-  const search = root.querySelector('#shop-search');
-  if (search) {
-    search.addEventListener('input', (event) => { ui.shop.q = event.target.value; });
-    search.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        runSearch(rerender);
-      }
-    });
-  }
 }
 
 function onClick(event, rerender) {
@@ -750,21 +648,6 @@ function onClick(event, rerender) {
   if (open) { openPdp(open.dataset.open); rerender(); return; }
   const page = event.target.closest('[data-page]');
   if (page) { ui.shop.page = Number(page.dataset.page); rerender(); return; }
-  const shopNode = event.target.closest('[data-shop-node]');
-  if (shopNode) {
-    ui.shop.nodeId = shopNode.dataset.shopNode;
-    ui.shop.query = '';
-    ui.shop.q = '';
-    ui.shop.page = 1;
-    ui.shop.view = 'list';
-    ui.shop.attrs = {};
-    rerender();
-    return;
-  }
-  const clear = event.target.closest('[data-clear]');
-  if (clear) { clearChip(clear.dataset.clear); rerender(); return; }
-  const axis = event.target.closest('[data-axis]');
-  if (axis) { pickAxis(axis.dataset.axis, axis.dataset.value, rerender); return; }
   const actionHost = event.target.closest('[data-action]');
   if (modal && actionHost && !modal.contains(actionHost)) return;
   const action = actionHost?.dataset.action;
@@ -802,16 +685,7 @@ function onClick(event, rerender) {
   if (action === 'approve-review') { approveReview(event.target.closest('[data-id]').dataset.id, rerender); return; }
   if (action === 'reject-review') { ui.rejectId = event.target.closest('[data-id]').dataset.id; ui.modal = 'reject'; rerender(); return; }
   if (action === 'confirm-reject') { rejectReview(rerender); return; }
-  if (action === 'run-search') { runSearch(rerender); return; }
-  if (action === 'clear-filters') { ui.shop.brands = []; ui.shop.price = ''; ui.shop.availableOnly = false; ui.shop.attrs = {}; ui.shop.page = 1; rerender(); return; }
-  if (action === 'toggle-error') { ui.shop.error = !ui.shop.error; rerender(); return; }
-  if (action === 'retry-shop') { ui.shop.error = false; rerender(); return; }
-  if (action === 'back-list') { ui.shop.view = 'list'; ui.shop.notice = ''; rerender(); return; }
-  if (action === 'add-cart') { addCart(rerender); return; }
-  if (action === 'wish') { ui.shop.notice = 'به علاقه‌مندی اضافه شد. این عمل خرید یا رزرو نیست.'; rerender(); return; }
-  if (action === 'add-compare') { addCompare(event.target.closest('[data-id]').dataset.id, rerender); return; }
-  if (action === 'open-compare') { ui.shop.view = 'compare'; rerender(); return; }
-  if (action === 'remove-compare') { ui.shop.compare = ui.shop.compare.filter((id) => id !== event.target.closest('[data-id]').dataset.id); rerender(); return; }
+  if (action === 'wish') { toast('به علاقه‌مندی اضافه شد. این عمل خرید یا رزرو نیست.', rerender); return; }
   if (action === 'crawler-new') { crawlerUi.view = 'wizard'; crawlerUi.wizardStep = 1; rerender(); return; }
   if (action === 'crawler-back-list') { crawlerUi.view = 'list'; crawlerUi.selectedJobId = null; rerender(); return; }
   if (action === 'crawler-method') { crawlerUi.draft.method = event.target.closest('[data-method]').dataset.method; rerender(); return; }
@@ -898,42 +772,7 @@ function onChange(event, rerender) {
     if (fields) fields.innerHTML = attributeFields(target.value, null);
     return;
   }
-  if (target.dataset.filterBrand) {
-    const values = new Set(ui.shop.brands);
-    target.checked ? values.add(target.dataset.filterBrand) : values.delete(target.dataset.filterBrand);
-    ui.shop.brands = [...values];
-    ui.shop.page = 1;
-    rerender();
-    return;
-  }
-  if (target.dataset.filterPrice) { ui.shop.price = ui.shop.price === target.dataset.filterPrice ? '' : target.dataset.filterPrice; ui.shop.page = 1; rerender(); return; }
-  if (target.dataset.filterAvail !== undefined) { ui.shop.availableOnly = target.checked; ui.shop.page = 1; rerender(); return; }
-  if (target.dataset.filterAttr) {
-    const key = target.dataset.filterAttr;
-    const values = new Set(ui.shop.attrs[key] || []);
-    target.checked ? values.add(target.value) : values.delete(target.value);
-    ui.shop.attrs = { ...ui.shop.attrs, [key]: [...values] };
-    ui.shop.page = 1;
-    rerender();
-    return;
-  }
-  if (target.dataset.sort !== undefined || target.matches('[data-sort]')) {
-    ui.shop.sort = target.value;
-    ui.shop.page = 1;
-    rerender();
-    return;
-  }
-  if (target.dataset.skuValue) {
-    const key = target.dataset.skuValue;
-    const values = new Set(ui.skuPick?.[key] || []);
-    target.checked ? values.add(target.value) : values.delete(target.value);
-    ui.skuPick = { ...ui.skuPick, [key]: [...values] };
-    refreshSkuCombos();
-    return;
-  }
-  if (target.dataset.axis) return;
   if (target.dataset.installment !== undefined) { ui.shop.offer = target.checked ? 'installment' : 'cash'; rerender(); return; }
-  if (target.dataset.diff !== undefined) { ui.shop.diffOnly = target.checked; rerender(); }
   if (target.id === 'crawler-source') { crawlerUi.draft.source = target.value; crawlerUi.draft.categories = []; rerender(); return; }
   if (target.id === 'crawler-cat-q') { crawlerUi.draft.categoryQuery = target.value; rerender(); return; }
   if (target.dataset.crawlerCat !== undefined) {

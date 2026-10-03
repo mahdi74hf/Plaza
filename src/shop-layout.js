@@ -98,12 +98,6 @@ function brandOptions(selected) {
     .join('')}`;
 }
 
-function plpHref(item) {
-  const params = new URLSearchParams({ screen: 'product', tab: 'shop', node: item.nodeId });
-  if (item.brandId) params.set('brand', item.brandId);
-  return `?${params.toString()}`;
-}
-
 function validationErrors() {
   const errors = [];
   shopLayoutState.data.groups.forEach((group) => {
@@ -198,10 +192,12 @@ function previewView() {
         <header><h2>${escape(group.title)}</h2>${group.description ? `<p>${escape(group.description)}</p>` : ''}<span>عنوان غیرقابل‌کلیک</span></header>
         <div class="shop-customer-columns">
           ${group.items.filter((item) => !item.hidden && validDestination(item.nodeId)).map((item) => `<article>
-            <a class="shop-level2-link" href="${plpHref(item)}">${escape(item.title)} <span>←</span></a>
-            <div>${item.children.filter((child) => !child.hidden && validDestination(child.nodeId)).map((child) => `<a href="${plpHref(child)}">${escape(child.title)}</a>`).join('')}</div>
+            <div class="shop-level2-link">${escape(item.title)}</div>
+            <small class="shop-preview-path">مقصد: ${escape(pathLabel(item.nodeId))}${item.brandId ? ` · برند ${escape(catalog.brands.find((brand) => brand.id === item.brandId)?.name || item.brandId)}` : ''}</small>
+            <div>${item.children.filter((child) => !child.hidden && validDestination(child.nodeId)).map((child) => `<div class="shop-preview-destination"><b>${escape(child.title)}</b><small>${escape(pathLabel(child.nodeId))}${child.brandId ? ` · برند ${escape(catalog.brands.find((brand) => brand.id === child.brandId)?.name || child.brandId)}` : ''}</small></div>`).join('')}</div>
           </article>`).join('')}
         </div>
+        <p class="hint">در محصول نهایی سطح دوم و سوم به PLP مقصد هدایت می‌شوند؛ شبیه‌سازی مستقل PLP از این Prototype حذف شده است.</p>
       </section>`).join('') : '<div class="empty-panel"><b>Group قابل‌نمایشی وجود ندارد</b><p>حداقل یک Item معتبر سطح دوم اضافه کن.</p></div>'}
     </div>
   </div>`;

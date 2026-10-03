@@ -1528,21 +1528,32 @@ svg {
   color: var(--ds-text-brand);
   font-size: var(--ds-text-md);
   font-weight: 700;
-  text-decoration: none;
+}
+.shop-preview-path {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: var(--ds-text-xs);
+  line-height: var(--ds-lh-xs);
 }
 .shop-customer-columns article > div {
   display: grid;
   gap: 8px;
   margin-top: 12px;
 }
-.shop-customer-columns article > div a {
+.shop-preview-destination {
+  display: grid;
+  gap: 2px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.shop-preview-destination b {
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-sm);
-  text-decoration: none;
 }
-.shop-customer-columns a:hover {
-  color: var(--primary);
-  text-decoration: underline;
+.shop-preview-destination small {
+  color: var(--muted);
+  font-size: var(--ds-text-xs);
 }
 .shop-layout-preview-shell.mobile .shop-customer-columns {
   grid-template-columns: 1fr;

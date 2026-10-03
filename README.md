@@ -16,7 +16,7 @@
 ### لینک دمو PRD-055
 
 - ویرایش چیدمان: `?screen=product&tab=shop-layout`
-- نمونه مقصد PLP: `?screen=product&tab=shop&node=electric-heater&brand=barfab`
+- مسیر مقصد PLP در Preview چیدمان نمایش داده می‌شود؛ پیش‌نمایش مستقل PLP از Prototype حذف شده است.
 
 ### لینک دمو PRD-066 (پس از Deploy)
 
