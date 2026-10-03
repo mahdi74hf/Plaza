@@ -136,7 +136,7 @@ function heading() {
 function subhead() {
   if (ui.tab === 'crawler') return crawlerSubhead();
   return {
-    'shop-layout': 'ساختار سه‌سطحی: Group بدون لینک، Itemهای سطح دوم و سوم متصل به PLP',
+    'shop-layout': 'ساختار سه‌سطحی: مقصد اختیاری برای Group و مقصد PLP برای سطح دوم و سوم',
     schema: 'برای هر LeafCat ویژگی بساز و نوع آن را مشخص کن؛ مثلاً حافظه رم از جنس عدد',
     brands: 'ایجاد برند، محدودکردن آن به LeafCat و جلوگیری از غیرفعال‌سازی برند در حال استفاده',
     variants: 'حداکثر دو محور Variant از ویژگی‌های انتخابی همان LeafCat',

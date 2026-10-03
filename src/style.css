@@ -1418,7 +1418,7 @@ svg {
   gap: 10px;
 }
 .shop-layout-fields.group-fields {
-  grid-template-columns: 1fr 1.5fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .shop-layout-fields .field {
   margin: 0;
@@ -1522,6 +1522,32 @@ svg {
 .shop-customer-group > header h2 {
   margin: 0 0 4px;
   font-size: 22px;
+}
+.shop-level1-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ds-text-brand);
+  font: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.shop-level1-link:hover {
+  color: var(--primary);
+}
+.shop-customer-group > header .shop-level1-link span {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
 }
 .shop-customer-group > header p {
   margin: 0;

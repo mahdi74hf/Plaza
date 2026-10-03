@@ -1,10 +1,10 @@
 import { catalog, logChange, persistCatalog } from './catalog.js';
 import { findNode, isActivePath, pathLabel, walk } from './tree.js';
 
-const STORAGE_KEY = 'plaza-shop-layout-v3';
+const STORAGE_KEY = 'plaza-shop-layout-v4';
 
 const seedLayout = {
-  version: 3,
+  version: 4,
   status: 'draft',
   updatedAt: new Date().toISOString(),
   publishedAt: '',
@@ -13,6 +13,8 @@ const seedLayout = {
       id: 'group-heating',
       title: 'لوازم گرمایشی',
       description: 'انتخاب سریع براساس برند یا نوع محصول',
+      nodeId: 'heating',
+      brandId: '',
       hidden: false,
       items: [
         {
@@ -91,6 +93,10 @@ function destinationOptions(selected) {
   )).join('');
 }
 
+function optionalDestinationOptions(selected) {
+  return `<option value="">بدون لینک</option>${destinationOptions(selected)}`;
+}
+
 function brandOptions(selected) {
   return `<option value="">بدون Filter برند</option>${catalog.brands
     .filter((brand) => brand.status === 'active')
@@ -102,6 +108,9 @@ function validationErrors() {
   const errors = [];
   shopLayoutState.data.groups.forEach((group) => {
     if (!group.title.trim()) errors.push('عنوان یک Group خالی است.');
+    if (group.nodeId && !validDestination(group.nodeId)) {
+      errors.push(`مقصد سطح اول «${group.title || 'بدون عنوان'}» معتبر نیست.`);
+    }
     const seen = new Set();
     group.items.forEach((item) => {
       const key = `${item.title.trim()}|${item.nodeId}|${item.brandId || ''}`;
@@ -150,7 +159,7 @@ function linkEditor(item, level, groupId, parentId = '') {
 function editorView() {
   return `<div class="shop-layout-editor">
     <div class="demo-callout">
-      <div><b>ساختار سه‌سطحی PRD-055</b><p>سطح اول فقط عنوان Group است و لینک ندارد. سطح دوم و سوم به PLP ساخته‌شده از CAT Tree و Filter اختیاری هدایت می‌شوند.</p></div>
+      <div><b>ساختار سه‌سطحی PRD-055 · v0.4</b><p>سطح اول می‌تواند بدون لینک یا متصل به PLP باشد. سطح دوم و سوم همیشه به PLP ساخته‌شده از CAT Tree و Filter اختیاری هدایت می‌شوند.</p></div>
       <div class="demo-callout-actions">
         <button type="button" class="secondary" data-action="shp-preview">Preview</button>
         <button type="button" class="primary" data-action="shp-publish">انتشار نسخه</button>
@@ -159,7 +168,7 @@ function editorView() {
     ${shopLayoutState.notice ? `<div class="validation-box">${escape(shopLayoutState.notice)}</div>` : ''}
     ${shopLayoutState.data.groups.map((group, index) => `<section class="card shop-layout-group ${group.hidden ? 'is-hidden' : ''}">
       <header>
-        <div><span class="type-pill">سطح ۱ · بدون لینک</span><h2>${escape(group.title || 'Group بدون عنوان')}</h2><p>${escape(group.description || '')}</p></div>
+        <div><span class="type-pill">سطح ۱ · ${group.nodeId ? 'قابل‌کلیک' : 'بدون لینک'}</span><h2>${escape(group.title || 'Group بدون عنوان')}</h2><p>${escape(group.description || '')}</p></div>
         <div class="detail-actions">
           <button type="button" class="action-button" data-action="shp-group-up" data-group="${group.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="action-button" data-action="shp-group-down" data-group="${group.id}">↓</button>
@@ -170,8 +179,12 @@ function editorView() {
       <div class="shop-layout-fields group-fields">
         <label class="field"><span>عنوان Group</span><input data-shp-group-field="title" data-group="${group.id}" value="${escape(group.title)}"/></label>
         <label class="field"><span>توضیح اختیاری</span><input data-shp-group-field="description" data-group="${group.id}" value="${escape(group.description)}"/></label>
+        <label class="field"><span>مقصد اختیاری سطح اول</span><select data-shp-group-field="nodeId" data-group="${group.id}">${optionalDestinationOptions(group.nodeId)}</select></label>
+        <label class="field"><span>Filter برند اختیاری</span><select data-shp-group-field="brandId" data-group="${group.id}" ${group.nodeId ? '' : 'disabled'}>${brandOptions(group.brandId)}</select></label>
       </div>
-      <div class="shop-no-link-note">این سطح عمداً Destination ندارد و در Shop قابل کلیک نیست.</div>
+      <div class="shop-no-link-note">${group.nodeId && validDestination(group.nodeId)
+        ? `این Group قابل‌کلیک است؛ مقصد: <b>${escape(pathLabel(group.nodeId))}</b>${group.brandId ? ` · برند ${escape(catalog.brands.find((brand) => brand.id === group.brandId)?.name || group.brandId)}` : ''}`
+        : 'بدون مقصد، این سطح فقط عنوان Group است و قابل‌کلیک نیست.'}</div>
       <div class="shop-layout-level2">${group.items.map((item) => linkEditor(item, 2, group.id)).join('')}</div>
       <button type="button" class="secondary" data-action="shp-add-level2" data-group="${group.id}">+ افزودن Item سطح دوم</button>
     </section>`).join('')}
@@ -187,9 +200,16 @@ function previewView() {
       <button type="button" class="${shopLayoutState.device === 'desktop' ? 'primary' : 'secondary'}" data-action="shp-device" data-device="desktop">Desktop</button>
       <button type="button" class="${shopLayoutState.device === 'mobile' ? 'primary' : 'secondary'}" data-action="shp-device" data-device="mobile">Mobile</button>
     </div>
+    ${shopLayoutState.notice ? `<div class="validation-box">${escape(shopLayoutState.notice)}</div>` : ''}
     <div class="shop-customer-preview">
       ${groups.length ? groups.map((group) => `<section class="shop-customer-group">
-        <header><h2>${escape(group.title)}</h2>${group.description ? `<p>${escape(group.description)}</p>` : ''}<span>عنوان غیرقابل‌کلیک</span></header>
+        <header>
+          ${group.nodeId && validDestination(group.nodeId)
+            ? `<button type="button" class="shop-level1-link" data-action="shp-preview-destination" data-node="${group.nodeId}" data-destination-brand="${group.brandId || ''}">${escape(group.title)} <span>←</span></button>`
+            : `<h2>${escape(group.title)}</h2>`}
+          ${group.description ? `<p>${escape(group.description)}</p>` : ''}
+          <span>${group.nodeId && validDestination(group.nodeId) ? `قابل‌کلیک · ${escape(pathLabel(group.nodeId))}` : 'عنوان غیرقابل‌کلیک'}</span>
+        </header>
         <div class="shop-customer-columns">
           ${group.items.filter((item) => !item.hidden && validDestination(item.nodeId)).map((item) => `<article>
             <div class="shop-level2-link">${escape(item.title)}</div>
@@ -197,7 +217,7 @@ function previewView() {
             <div>${item.children.filter((child) => !child.hidden && validDestination(child.nodeId)).map((child) => `<div class="shop-preview-destination"><b>${escape(child.title)}</b><small>${escape(pathLabel(child.nodeId))}${child.brandId ? ` · برند ${escape(catalog.brands.find((brand) => brand.id === child.brandId)?.name || child.brandId)}` : ''}</small></div>`).join('')}</div>
           </article>`).join('')}
         </div>
-        <p class="hint">در محصول نهایی سطح دوم و سوم به PLP مقصد هدایت می‌شوند؛ شبیه‌سازی مستقل PLP از این Prototype حذف شده است.</p>
+        <p class="hint">هر سطحی که مقصد دارد به PLP هدایت می‌شود؛ شبیه‌سازی مستقل PLP از این Prototype حذف شده است.</p>
       </section>`).join('') : '<div class="empty-panel"><b>Group قابل‌نمایشی وجود ندارد</b><p>حداقل یک Item معتبر سطح دوم اضافه کن.</p></div>'}
     </div>
   </div>`;
@@ -242,8 +262,12 @@ export function handleShopLayoutClick(action, host, rerender) {
   if (action === 'shp-preview') shopLayoutState.mode = 'preview';
   if (action === 'shp-editor') shopLayoutState.mode = 'editor';
   if (action === 'shp-device') shopLayoutState.device = host.dataset.device;
+  if (action === 'shp-preview-destination') {
+    const brand = catalog.brands.find((entry) => entry.id === host.dataset.destinationBrand)?.name;
+    shopLayoutState.notice = `کلیک ثبت شد؛ مقصد PLP: ${pathLabel(host.dataset.node)}${brand ? ` · برند ${brand}` : ''}`;
+  }
   if (action === 'shp-add-group') {
-    shopLayoutState.data.groups.push({ id: id('group'), title: 'Group جدید', description: '', hidden: false, items: [] });
+    shopLayoutState.data.groups.push({ id: id('group'), title: 'Group جدید', description: '', nodeId: '', brandId: '', hidden: false, items: [] });
   }
   if (action === 'shp-delete-group') shopLayoutState.data.groups = shopLayoutState.data.groups.filter((entry) => entry.id !== host.dataset.group);
   if (action === 'shp-toggle-group' && group) group.hidden = !group.hidden;
@@ -266,7 +290,7 @@ export function handleShopLayoutClick(action, host, rerender) {
       shopLayoutState.data.status = 'published';
       shopLayoutState.data.version += 1;
       shopLayoutState.data.publishedAt = new Date().toISOString();
-      shopLayoutState.notice = `نسخه ${shopLayoutState.data.version} منتشر شد؛ سطح اول بدون لینک و مقصدهای سطح دوم/سوم معتبر هستند.`;
+      shopLayoutState.notice = `نسخه ${shopLayoutState.data.version} منتشر شد؛ مقصدهای تعریف‌شده در هر سه سطح معتبر هستند.`;
       logChange(`انتشار Shop Layout نسخه ${shopLayoutState.data.version}`);
       persistCatalog();
     }
@@ -279,7 +303,10 @@ export function handleShopLayoutClick(action, host, rerender) {
 export function handleShopLayoutChange(target, rerender) {
   if (target.dataset.shpGroupField) {
     const group = shopLayoutState.data.groups.find((entry) => entry.id === target.dataset.group);
-    if (group) group[target.dataset.shpGroupField] = target.value;
+    if (group) {
+      group[target.dataset.shpGroupField] = target.value;
+      if (target.dataset.shpGroupField === 'nodeId' && !target.value) group.brandId = '';
+    }
   } else if (target.dataset.shpField) {
     const { item } = locate(target.dataset.group, target.dataset.parent, target.dataset.id);
     if (item) item[target.dataset.shpField] = target.value;
