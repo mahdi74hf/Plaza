@@ -51,6 +51,7 @@ import {
   selectedJob,
   crawlerState as crawlerUi,
 } from './crawler.js';
+import { handleInventoryChange, handleInventoryClick, inventoryView } from './inventory.js';
 import { handleShopLayoutChange, handleShopLayoutClick, shopLayoutView } from './shop-layout.js';
 import { findNode, pathLabel, walk } from './tree.js';
 
@@ -65,6 +66,7 @@ const ui = {
 };
 
 const tabs = [
+  ['inventory', 'مدیریت قیمت و موجودی', 'PRD-068'],
   ['shop-layout', 'چیدمان Shop', 'PRD-055'],
   ['schema', 'ویژگی', 'PRD-044'],
   ['brands', 'برند', 'PRD-046'],
@@ -121,7 +123,7 @@ export function productContent(icon) {
       ${headAction(icon)}
     </div>
     <div class="prd-tabs">${tabs.map(([id, label, code]) => `<button type="button" data-tab="${id}" class="${ui.tab === id ? 'active' : ''}">${label}<small>${code}</small></button>`).join('')}</div>
-    ${ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : productsView()}
+    ${ui.tab === 'inventory' ? inventoryView() : ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : productsView()}
     <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>ویژگی LeafCat، برند، واریانت و محصول در localStorage همین مرورگر می‌مانند.</small></span></div></section>
     ${modalHtml()}
     ${ui.toast ? `<div class="toast">${icon('check')} ${escape(ui.toast)}</div>` : ''}
@@ -130,12 +132,13 @@ export function productContent(icon) {
 
 function heading() {
   if (ui.tab === 'crawler') return crawlerHeading();
-  return { 'shop-layout': 'چیدمان منعطف دسته‌بندی‌های Shop', schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ' }[ui.tab] || 'محصولات کاتالوگ';
+  return { inventory: 'مدیریت قیمت و موجودی', 'shop-layout': 'چیدمان منعطف دسته‌بندی‌های Shop', schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ' }[ui.tab] || 'محصولات کاتالوگ';
 }
 
 function subhead() {
   if (ui.tab === 'crawler') return crawlerSubhead();
   return {
+    inventory: 'قیمت، تخفیف و موجودی آماری و غیرآماری روی هر SKU',
     'shop-layout': 'ساختار سه‌سطحی: مقصد LeafCat یا لندینگ، همراه Filter برند و مدل',
     schema: 'برای هر LeafCat ویژگی بساز و نوع آن را مشخص کن؛ مثلاً حافظه رم از جنس عدد',
     brands: 'ایجاد برند، محدودکردن آن به LeafCat و جلوگیری از غیرفعال‌سازی برند در حال استفاده',
@@ -652,6 +655,7 @@ function onClick(event, rerender) {
   if (modal && actionHost && !modal.contains(actionHost)) return;
   const action = actionHost?.dataset.action;
   if (!action) return;
+  if (handleInventoryClick(action, actionHost, rerender)) return;
   if (handleShopLayoutClick(action, actionHost, rerender)) return;
   if (action === 'close') { ui.modal = null; rerender(); return; }
   if (action === 'new-brand') { ui.editingId = null; ui.modal = 'brand'; rerender(); return; }
@@ -759,6 +763,7 @@ function onClick(event, rerender) {
 
 function onChange(event, rerender) {
   const target = event.target;
+  if (handleInventoryChange(target, rerender)) return;
   if (handleShopLayoutChange(target, rerender)) return;
   if (target.dataset.field === 'customer') { ui.customerId = target.value; rerender(); return; }
   if (target.id === 'attr-leaf' || target.id === 'attr-type') return;
