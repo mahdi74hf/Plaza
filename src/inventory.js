@@ -126,13 +126,13 @@ function leafTools() {
   return `<section class="card inv-tools">
     <div class="inv-grid">
       <label class="field"><span>LeafCat</span><select data-inv-field="leafId">${options}</select></label>
-      <label class="field"><span>درصد قیمت</span><input data-inv-field="percent" value="${escape(state.percent)}" inputmode="decimal"/></label>
-      <label class="field"><span>مهلت رزرو پرداخت ناقص</span><input data-inv-field="reserveMinutes" value="${escape(state.reserveMinutes)}" inputmode="numeric"/><small>دقیقه، پیش‌فرض ۶۰</small></label>
-      <div class="detail-actions">
-        <button type="button" class="primary" data-action="inv-percent">اعمال درصد</button>
-        <button type="button" class="secondary" data-action="inv-block">${blocked ? 'برداشتن ناموجودی LeafCat' : 'ناموجود کردن LeafCat'}</button>
-        <button type="button" class="secondary" data-action="inv-download">دانلود اکسل</button>
-      </div>
+      <label class="field"><span>درصد قیمت</span><input type="text" data-inv-field="percent" value="${escape(state.percent)}"/></label>
+      <label class="field"><span>مهلت رزرو</span><input type="text" data-inv-field="reserveMinutes" value="${escape(state.reserveMinutes)}"/><small>دقیقه، پیش‌فرض ۶۰</small></label>
+    </div>
+    <div class="inv-actions">
+      <button type="button" class="primary" data-action="inv-percent">اعمال درصد</button>
+      <button type="button" class="secondary" data-action="inv-block">${blocked ? 'برداشتن ناموجودی LeafCat' : 'ناموجود کردن LeafCat'}</button>
+      <button type="button" class="secondary" data-action="inv-download">دانلود اکسل</button>
     </div>
   </section>`;
 }
@@ -141,20 +141,20 @@ function editCard({ product, item, record }) {
   return `<section class="card">
     <header><div><span class="type-pill">${escape(item.code)}</span><h2>${escape(product.title)}</h2><p>${escape(pathLabel(product.leafId) || '')}</p></div></header>
     <div class="inv-grid">
-      <label class="field"><span>قیمت پایه</span><input data-inv-edit="price" value="${escape(record.price)}"/></label>
+      <label class="field"><span>قیمت پایه</span><input type="text" data-inv-edit="price" value="${escape(record.price)}"/></label>
       <label class="field"><span>نوع تخفیف</span><select data-inv-edit="discountType">
         <option value="none" ${record.discountType === 'none' ? 'selected' : ''}>بدون تخفیف</option>
         <option value="percent" ${record.discountType === 'percent' ? 'selected' : ''}>درصد</option>
         <option value="amount" ${record.discountType === 'amount' ? 'selected' : ''}>مبلغ</option>
       </select></label>
-      <label class="field"><span>مقدار تخفیف</span><input data-inv-edit="discountValue" value="${escape(record.discountValue)}"/></label>
-      <label class="field"><span>قیمت فروش</span><b>${money(salePrice(record))}</b></label>
-      <label class="field"><span>موجودی آماری</span><input data-inv-edit="statistical" value="${escape(record.statistical)}" placeholder="خالی یا صفر"/></label>
-      <label class="field"><span>موجودی غیرآماری</span><input data-inv-edit="nonStatistical" value="${escape(record.nonStatistical)}" placeholder="خالی یا صفر"/></label>
-      <label class="field"><span>مجموع</span><b>${totalOf(record)}</b></label>
-      <label class="field"><span>وضعیت</span><b>${availability(product, record)}</b></label>
+      <label class="field"><span>مقدار تخفیف</span><input type="text" data-inv-edit="discountValue" value="${escape(record.discountValue)}"/></label>
+      <label class="field"><span>قیمت فروش</span><output>${money(salePrice(record))}</output></label>
+      <label class="field"><span>موجودی آماری</span><input type="text" data-inv-edit="statistical" value="${escape(record.statistical)}" placeholder="خالی یا صفر"/></label>
+      <label class="field"><span>موجودی غیرآماری</span><input type="text" data-inv-edit="nonStatistical" value="${escape(record.nonStatistical)}" placeholder="خالی یا صفر"/></label>
+      <label class="field"><span>مجموع</span><output>${totalOf(record)}</output></label>
+      <label class="field"><span>وضعیت</span><output>${availability(product, record)}</output></label>
     </div>
-    <button type="button" class="primary" data-action="inv-save" data-sku="${escape(item.code)}">ذخیره SKU</button>
+    <div class="inv-actions"><button type="button" class="primary" data-action="inv-save" data-sku="${escape(item.code)}">ذخیره SKU</button></div>
   </section>`;
 }
 
