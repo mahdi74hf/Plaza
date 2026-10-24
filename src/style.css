@@ -1754,3 +1754,26 @@ svg {
     grid-column: 1 / -1;
   }
 }
+
+.srch { display: grid; gap: 16px; }
+.srch-top, .srch-tools, .srch-suggest > div, .srch-fix { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+.srch h1 { margin: 4px 0; font-size: 28px; }
+.srch-box { display: flex; gap: 8px; background: var(--ds-ui); border: 1px solid var(--ds-border-input); border-radius: var(--ds-radius-lg); padding: 8px; }
+.srch-box input { flex: 1; border: 0; min-height: var(--ds-control-h); font: inherit; background: transparent; }
+.srch-box button, .srch-suggest button, .srch-hints button, .srch-admin button { border: 1px solid var(--ds-border-subtle); background: var(--ds-ui); border-radius: var(--ds-radius-md); min-height: 36px; padding: 0 10px; font: inherit; cursor: pointer; }
+.srch-suggest, .srch-hints, .srch-card, .srch-admin article { background: var(--ds-ui); border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-lg); padding: 12px; }
+.srch-suggest { display: flex; flex-wrap: wrap; gap: 8px; }
+.srch-suggest > div { width: 100%; }
+.srch-suggest span { display: inline-flex; align-items: center; gap: 4px; }
+.srch-hints { display: flex; flex-wrap: wrap; gap: 8px; }
+.srch-hints b { width: 100%; }
+.srch-grid, .srch-admin { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.srch-card { display: grid; gap: 6px; }
+.srch-card small, .srch-card em { color: var(--ds-text-secondary); font-style: normal; }
+.srch-card em.ok { color: var(--ds-success-text); }
+.srch-card button, .srch-admin .primary { width: auto; margin: 0; }
+.srch-fix, .srch-note, .srch-empty { margin: 0; }
+.srch-admin form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.srch-admin input, .srch-admin select { min-height: var(--ds-control-h); border: 1px solid var(--ds-border-input); border-radius: var(--ds-radius-md); padding: 0 8px; font: inherit; }
+.srch-login { display: flex; gap: 8px; align-items: center; }
+@media (max-width: 800px) { .srch-grid, .srch-admin { grid-template-columns: 1fr; } }

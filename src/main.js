@@ -1,5 +1,6 @@
 import './style.css';
 import { applyProductDeepLink, bindProduct, openProductGaps, productContent, productMeta } from './product.js';
+import { bindSearch, searchContent } from './search.js';
 import { logChange, productsOnLeaf } from './catalog.js';
 import { countActiveType, countNodes, countType, findNode, getSiblings, persistTree, removeNode, tree } from './tree.js';
 
@@ -35,7 +36,8 @@ const openDecisions = [
 
 function readLaunchState() {
   const params = new URLSearchParams(window.location.search);
-  const screen = params.get('screen') === 'product' ? 'product' : 'category';
+  const asked = params.get('screen');
+  const screen = asked === 'product' || asked === 'search' ? asked : 'category';
   if (screen === 'product') applyProductDeepLink(params);
   return {
     screen,
@@ -225,22 +227,24 @@ function decisionsModal() {
 function render() {
   const selected = findNode(state.selected)?.node;
   const product = state.screen === 'product';
+  const search = state.screen === 'search';
   const meta = product ? productMeta() : null;
   document.querySelector('#app').innerHTML = `<div class="layout">
     <aside class="sidebar">
       <div class="logo"><i><span></span><span></span><span></span></i><div><b>plaza</b><small>PRD PROTOTYPES</small></div></div>
       <nav>
-        <button class="${product ? '' : 'active'}" data-screen="category"><span>${icon('tree')}</span><b>دسته‌بندی</b><em>PRD-001</em></button>
+        <button class="${state.screen === 'category' ? 'active' : ''}" data-screen="category"><span>${icon('tree')}</span><b>دسته‌بندی</b><em>PRD-001</em></button>
         <button class="${product ? 'active' : ''}" data-screen="product"><span>${icon('box')}</span><b>محصول</b><em>${product ? meta.code : 'Product'}</em></button>
+        <button class="${search ? 'active' : ''}" data-screen="search"><span>${icon('search')}</span><b>سرچ</b><em>PRD-004</em></button>
       </nav>
-      <div class="prd-box"><small>PRD فعال</small><b>${product ? meta.name : 'ایجاد CAT Tree'}</b><span>${product ? meta.code : 'نسخه ۰.۲'} · P0</span><div><i></i>Draft</div></div>
+      <div class="prd-box"><small>PRD فعال</small><b>${product ? meta.name : search ? 'Search & Discovery' : 'ایجاد CAT Tree'}</b><span>${product ? meta.code : search ? 'PRD-004' : 'نسخه ۰.۲'} · P0</span><div><i></i>Draft</div></div>
       <button class="gap-button" data-action="decisions"><span>${product ? meta.gaps : 5}</span><div><b>تصمیم باز</b><small>نیازمند تعیین تکلیف</small></div></button>
       <div class="profile"><span>م‌ف</span><div><b>مهدی فرحزادی</b><small>مالک محصول</small></div></div>
     </aside>
     <main>
-      <header class="topbar"><div><b>Plaza Digital</b><i>/</i><span>${product ? 'Product' : 'Category'}</span><i>/</i><strong>${product ? meta.code : 'PRD-001'}</strong></div><button class="avatar">م‌ف</button></header>
+      <header class="topbar"><div><b>Plaza Digital</b><i>/</i><span>${product ? 'Product' : search ? 'Search' : 'Category'}</span><i>/</i><strong>${product ? meta.code : search ? 'PRD-004' : 'PRD-001'}</strong></div><button class="avatar">م‌ف</button></header>
       <div class="content">
-        ${product ? productContent(icon) : `<div class="page-head"><div><span class="eyebrow">CATEGORY · PRD-001</span><h1>ساختار دسته‌بندی</h1><p>ایجاد و مشاهده مسیر معتبر از Vertical تا LeafCat</p></div><button class="primary" data-action="add-root">${icon('plus')} نود جدید</button></div>
+        ${search ? searchContent() : product ? productContent(icon) : `<div class="page-head"><div><span class="eyebrow">CATEGORY · PRD-001</span><h1>ساختار دسته‌بندی</h1><p>ایجاد و مشاهده مسیر معتبر از Vertical تا LeafCat</p></div><button class="primary" data-action="add-root">${icon('plus')} نود جدید</button></div>
         <div class="stats">
           <div><span>کل نودها</span><b>${countNodes()}</b></div><div><span>Vertical</span><b>${countType('Vertical')}</b></div><div><span>LeafCat فعال</span><b>${countActiveType('LeafCat')}</b></div><div class="gap-stat"><span>تصمیم باز</span><b>۵</b></div>
         </div>
@@ -279,6 +283,12 @@ function syncDemoUrl() {
       url.searchParams.delete('job');
       url.searchParams.delete('view');
     }
+  } else if (state.screen === 'search') {
+    url.searchParams.set('screen', 'search');
+    url.searchParams.delete('tab');
+    url.searchParams.delete('crawler');
+    url.searchParams.delete('job');
+    url.searchParams.delete('view');
   } else {
     url.searchParams.delete('screen');
     url.searchParams.delete('tab');
@@ -298,6 +308,10 @@ function bindEvents() {
     syncDemoUrl();
     render();
   }));
+  if (state.screen === 'search') {
+    bindSearch(render);
+    return;
+  }
   if (state.screen === 'product') {
     bindProduct(render);
     document.querySelector('.gap-button')?.addEventListener('click', () => {
