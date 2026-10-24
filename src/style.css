@@ -1400,8 +1400,49 @@ svg {
   gap: 12px;
 }
 .shop-layout-group > header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 7px 0 2px;
   font-size: var(--ds-text-md);
+}
+.shop-icon-picker {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+}
+.shop-icon-picker > span {
+  color: var(--muted);
+  font-size: var(--ds-text-xs);
+}
+.shop-icon-picker > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.shop-icon-option {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--ds-border-input);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-ui);
+  color: var(--ds-text);
+  cursor: pointer;
+}
+.shop-icon-option.is-selected {
+  border-color: var(--primary);
+  background: var(--ds-brand-soft, #e7f6ef);
+}
+.shop-group-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .shop-layout-group > header p {
   margin: 0;
@@ -1529,6 +1570,9 @@ svg {
   border-bottom: 1px solid var(--line);
 }
 .shop-customer-group > header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 4px;
   font-size: 22px;
 }

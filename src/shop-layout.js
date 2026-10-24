@@ -3,6 +3,37 @@ import { pathLabel, publicLeaves } from './tree.js';
 
 const STORAGE_KEY = 'plaza-shop-layout-v5';
 
+const GROUP_ICONS = [
+  ['mobile', 'موبایل'],
+  ['laptop', 'لپ‌تاپ'],
+  ['tv', 'صوتی و تصویری'],
+  ['home', 'خانه'],
+  ['heater', 'گرمایشی'],
+  ['kitchen', 'آشپزخانه'],
+  ['game', 'گیمینگ'],
+  ['fashion', 'پوشاک'],
+  ['beauty', 'زیبایی'],
+  ['sport', 'ورزش'],
+];
+
+function groupIcon(iconId) {
+  const paths = {
+    mobile: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+    laptop: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M2 19h20"/>',
+    tv: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M8 21h8M12 18v3"/>',
+    home: '<path d="M4 11.5 12 4l8 7.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1z"/>',
+    heater: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8c1 1.2 1 2.2 0 3.4S8 13.2 9 14.4M15 8c1 1.2 1 2.2 0 3.4s-1 1.8 0 3"/>',
+    kitchen: '<path d="M8 3v8a4 4 0 0 0 8 0V3M8 7h8M12 15v6"/>',
+    game: '<rect x="2" y="7" width="20" height="11" rx="4"/><path d="M8 12h4M10 10v4M16 11h.01M18 14h.01"/>',
+    fashion: '<path d="M8 6 4 9l2 2 2-2v9h8v-9l2 2 2-2-4-3a4 4 0 0 0-8 0z"/>',
+    beauty: '<path d="M9 3h6v4a3 3 0 0 1-6 0zM8 10h8l-1 11H9z"/>',
+    sport: '<circle cx="12" cy="12" r="8"/><path d="M12 4c2 2.2 3 4.8 3 8s-1 5.8-3 8c-2-2.2-3-4.8-3-8s1-5.8 3-8zM4.5 9h15M4.5 15h15"/>',
+  };
+  const body = paths[iconId];
+  if (!body) return '';
+  return `<svg class="shop-group-icon" viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
+}
+
 export const shopLandings = [
   { id: 'landing-black-friday', title: 'بلک فرایدی', status: 'published', slug: 'black-friday' },
   { id: 'landing-gaming', title: 'جشنواره گیمینگ', status: 'published', slug: 'gaming-festival' },
@@ -21,6 +52,7 @@ const seedLayout = {
       id: 'group-heating',
       title: 'لوازم گرمایشی',
       description: 'انتخاب سریع براساس برند، مدل یا کمپین',
+      icon: 'heater',
       destType: 'landing',
       nodeId: '',
       landingId: 'landing-heating',
@@ -152,6 +184,7 @@ function normalizeGroup(group) {
     id: group.id,
     title: group.title || '',
     description: group.description || '',
+    icon: GROUP_ICONS.some(([id]) => id === group.icon) ? group.icon : '',
     items: (group.items || []).map((item) => ({
       ...normalizeLink(item, true),
       id: item.id,
@@ -379,7 +412,7 @@ function linkEditor(item, level, groupId, parentId = '') {
 function editorView() {
   return `<div class="shop-layout-editor">
     <div class="demo-callout">
-      <div><b>ساختار سه‌سطحی PRD-055 · v0.5</b><p>سطح اول می‌تواند بدون لینک باشد یا به LeafCat / لندینگ منتشرشده وصل شود. سطح دوم و سوم همیشه یکی از این دو مقصد را دارند. Filter برند و مدل فقط برای مقصد LeafCat فعال است. لندینگ‌ساز در فاز بعد اضافه می‌شود.</p></div>
+      <div><b>ساختار سه‌سطحی PRD-055 · v0.5</b><p>سطح اول می‌تواند بدون لینک باشد یا به LeafCat / لندینگ منتشرشده وصل شود و آیکون فقط برای همین سطح انتخاب می‌شود. سطح دوم و سوم آیکون ندارند و با عنوان و مقصد ساخته می‌شوند. Filter برند و مدل فقط برای مقصد LeafCat فعال است.</p></div>
       <div class="demo-callout-actions">
         <button type="button" class="secondary" data-action="shp-preview">Preview</button>
         <button type="button" class="primary" data-action="shp-publish">انتشار نسخه</button>
@@ -388,7 +421,7 @@ function editorView() {
     ${shopLayoutState.notice ? `<div class="validation-box">${escape(shopLayoutState.notice)}</div>` : ''}
     ${shopLayoutState.data.groups.map((group, index) => `<section class="card shop-layout-group ${group.hidden ? 'is-hidden' : ''}">
       <header>
-        <div><span class="type-pill">سطح ۱ · ${destinationKind(group)}</span><h2>${escape(group.title || 'Group بدون عنوان')}</h2><p>${escape(group.description || '')}</p></div>
+        <div><span class="type-pill">سطح ۱ · ${destinationKind(group)}</span><h2>${groupIcon(group.icon)}${escape(group.title || 'Group بدون عنوان')}</h2><p>${escape(group.description || '')}</p></div>
         <div class="detail-actions">
           <button type="button" class="action-button" data-action="shp-group-up" data-group="${group.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="action-button" data-action="shp-group-down" data-group="${group.id}">↓</button>
@@ -398,6 +431,13 @@ function editorView() {
       </header>
       <div class="shop-layout-fields group-fields ${group.destType === 'landing' ? 'is-landing' : group.destType === 'leaf' ? 'is-leaf' : 'is-empty'}">
         <label class="field"><span>عنوان Group</span><input data-shp-group-field="title" data-group="${group.id}" value="${escape(group.title)}"/></label>
+        <div class="shop-icon-picker">
+          <span>آیکون سطح اول</span>
+          <div>
+            <button type="button" class="shop-icon-option ${group.icon ? '' : 'is-selected'}" data-action="shp-set-icon" data-group="${group.id}" data-icon="" aria-label="بدون آیکون">—</button>
+            ${GROUP_ICONS.map(([iconId, label]) => `<button type="button" class="shop-icon-option ${group.icon === iconId ? 'is-selected' : ''}" data-action="shp-set-icon" data-group="${group.id}" data-icon="${iconId}" aria-label="${label}">${groupIcon(iconId)}</button>`).join('')}
+          </div>
+        </div>
         <label class="field"><span>توضیح اختیاری</span><input data-shp-group-field="description" data-group="${group.id}" value="${escape(group.description)}"/></label>
         <label class="field"><span>نوع مقصد</span><select data-shp-group-field="destType" data-group="${group.id}">${destTypeOptions(group.destType, false)}</select></label>
         ${group.destType === 'leaf' ? `<label class="field"><span>LeafCat مقصد</span><select data-shp-group-field="nodeId" data-group="${group.id}">${leafOptions(group.nodeId)}</select></label>
@@ -432,8 +472,8 @@ function previewView() {
       ${groups.length ? groups.map((group) => `<section class="shop-customer-group">
         <header>
           ${group.destType && validLink(group, false)
-            ? `<button type="button" class="shop-level1-link" ${previewAttrs(group)}>${escape(group.title)} <span>←</span></button>`
-            : `<h2>${escape(group.title)}</h2>`}
+            ? `<button type="button" class="shop-level1-link" ${previewAttrs(group)}>${groupIcon(group.icon)}${escape(group.title)} <span>←</span></button>`
+            : `<h2>${groupIcon(group.icon)}${escape(group.title)}</h2>`}
           ${group.description ? `<p>${escape(group.description)}</p>` : ''}
           <span>${group.destType && validLink(group, false) ? escape(destinationLabel(group)) : 'عنوان غیرقابل‌کلیک'}</span>
         </header>
@@ -522,10 +562,13 @@ export function handleShopLayoutClick(action, host, rerender) {
   if (action === 'shp-device') shopLayoutState.device = host.dataset.device;
   if (action === 'shp-preview-destination') clickNotice(host);
   if (action === 'shp-add-group') {
-    shopLayoutState.data.groups.push({ ...createLink('Group جدید', false), description: '', items: [] });
+    shopLayoutState.data.groups.push({ ...createLink('Group جدید', false), description: '', icon: '', items: [] });
   }
   if (action === 'shp-delete-group') shopLayoutState.data.groups = shopLayoutState.data.groups.filter((entry) => entry.id !== host.dataset.group);
   if (action === 'shp-toggle-group' && group) group.hidden = !group.hidden;
+  if (action === 'shp-set-icon' && group) {
+    group.icon = GROUP_ICONS.some(([iconId]) => iconId === host.dataset.icon) ? host.dataset.icon : '';
+  }
   if (action === 'shp-group-up' || action === 'shp-group-down') move(shopLayoutState.data.groups, host.dataset.group, action.endsWith('up') ? -1 : 1);
   if (action === 'shp-add-level2' && group) {
     group.items.push({ ...createLink('Item سطح دوم', true), children: [] });
