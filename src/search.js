@@ -38,6 +38,11 @@ const defaultMaps = [
   { from: 'گوشی', to: 'موبایل', both: true },
 ];
 
+const defaultAliases = [
+  { term: 'آیفون', productId: 'iphone' },
+  { term: 'گلکسی', productId: 'galaxy' },
+];
+
 function load() {
   try {
     return JSON.parse(localStorage.getItem(KEY)) || {};
@@ -59,6 +64,7 @@ const ui = {
   recents: saved.recents || ['آیفون', 'گلکسی'],
   counts: saved.counts || { موبایل: 42, گلس: 28, بخاری: 17, آیفون: 15 },
   maps: saved.maps || defaultMaps,
+  aliases: saved.aliases || defaultAliases,
   log: saved.log || [],
 };
 
@@ -67,6 +73,7 @@ function persist() {
     recents: ui.recents,
     counts: ui.counts,
     maps: ui.maps,
+    aliases: ui.aliases,
     log: ui.log.slice(0, 30),
   }));
 }
@@ -81,7 +88,7 @@ function products() {
       ...item,
       leafName: findNode(item.leafId)?.node?.name || item.leafId,
       kind: item.leafId === 'phone' ? 'phone' : 'other',
-      aliases: [],
+      aliases: ui.aliases.filter((row) => row.productId === item.id).map((row) => row.term),
     })),
     ...extras,
   ];
@@ -131,7 +138,7 @@ function score(item, expanded, raw) {
     why = 'عنوان کامل';
   } else if ([item.model, brandById(item.brandId)?.name, ...(item.aliases || [])].some((part) => part && (normalize(part) === expanded.text || compact(part) === qCompact))) {
     rank = 600;
-    why = 'مدل یا برند';
+    why = 'مدل، برند یا Alias';
   } else if (qCompact.length >= 2 && (bag.includes(qCompact) || expanded.words.some((word) => word.length >= 2 && bag.includes(compact(word))))) {
     rank = 200;
     why = 'تطابق جزئی';
@@ -224,23 +231,26 @@ function admin() {
   const top = popular();
   const zero = ui.log.filter((row) => row.hits === 0);
   return `<section class="srch">
-    <div class="srch-top"><div><span class="eyebrow">ADMIN · PRD-004</span><h1>همسان‌سازی سرچ</h1><p>هر عبارتی که مشتری می‌زند را به کلمه‌ای که باید جست‌وجو شود وصل کن. Alias جدا تعریف نشده؛ همین جدول است.</p></div></div>
-    <article class="srch-map">
-      <form data-srch-map>
-        <input name="from" placeholder="عبارت مشتری، مثل کلش" />
-        <input name="to" placeholder="جست‌وجو شود، مثل گلس" />
-        <label><input type="checkbox" name="both" /> دو طرفه</label>
-        <button class="primary" type="submit">افزودن</button>
-      </form>
-      <table>
-        <thead><tr><th>مشتری می‌زند</th><th>جست‌وجو می‌شود</th><th>جهت</th><th></th></tr></thead>
-        <tbody>${ui.maps.map((rule, index) => `<tr><td>${escape(rule.from)}</td><td>${escape(rule.to)}</td><td>${rule.both ? 'هر دو طرف' : 'فقط همین جهت'}</td><td><button type="button" data-srch-map-del="${index}">حذف</button></td></tr>`).join('')}</tbody>
-      </table>
-      <p>یک‌طرفه یعنی «کلش» همان «گلس» است و در کادر اصلاح می‌شود. دو طرفه یعنی «گوشی» و «موبایل» هر دو یک جست‌وجو هستند و عبارت مشتری عوض نمی‌شود.</p>
-    </article>
+    <div class="srch-top"><div><span class="eyebrow">ADMIN · PRD-004</span><h1>مدیریت سرچ</h1><p>گزارش، مپ کلمه‌ها و Alias همین‌جا تعریف می‌شود.</p></div></div>
     <div class="srch-admin">
-      <article><h2>پرجستجو</h2>${top.map(([query, count]) => `<p>${escape(query)} <b>${fa(count)}</b></p>`).join('') || '<p>هنوز جست‌وجویی نیست.</p>'}</article>
-      <article><h2>بدون نتیجه</h2>${zero.length ? zero.slice(0, 6).map((row) => `<p>${escape(row.query)} <small>${escape(row.at)}</small></p>`).join('') : '<p>موردی نیست.</p>'}</article>
+      <article><h2>گزارش</h2><b>پرجستجو</b>${top.map(([query, count]) => `<p>${escape(query)} <b>${fa(count)}</b></p>`).join('') || '<p>هنوز جست‌وجویی نیست.</p>'}<b>بدون نتیجه</b>${zero.length ? zero.slice(0, 6).map((row) => `<p>${escape(row.query)} <small>${escape(row.at)}</small></p>`).join('') : '<p>موردی نیست.</p>'}</article>
+      <article><h2>مپ کلمه</h2>
+        <form data-srch-map>
+          <input name="from" placeholder="کلس" />
+          <input name="to" placeholder="گلس" />
+          <label><input type="checkbox" name="both" /> دو طرفه</label>
+          <button class="primary" type="submit">افزودن</button>
+        </form>
+        ${ui.maps.map((rule, index) => `<p>${escape(rule.from)} ${rule.both ? '↔' : '←'} ${escape(rule.to)} <button type="button" data-srch-map-del="${index}">حذف</button></p>`).join('')}
+      </article>
+      <article class="srch-span"><h2>Alias</h2>
+        <form data-srch-alias>
+          <input name="term" placeholder="آیفون" />
+          <select name="productId">${products().map((item) => `<option value="${item.id}">${escape(item.title)}</option>`).join('')}</select>
+          <button class="primary" type="submit">افزودن</button>
+        </form>
+        ${ui.aliases.map((row, index) => `<p>${escape(row.term)} ← ${escape(products().find((item) => item.id === row.productId)?.title || row.productId)} <button type="button" data-srch-alias-del="${index}">حذف</button></p>`).join('') || '<p>Aliasی نیست.</p>'}
+      </article>
     </div>
   </section>`;
 }
@@ -255,7 +265,7 @@ function escape(value) {
 
 export function searchContent() {
   return `<div class="srch-shell">
-    <div class="prd-tabs"><button type="button" class="${ui.mode === 'shop' ? 'active' : ''}" data-srch-mode="shop">ویترین<small>SRCH</small></button><button type="button" class="${ui.mode === 'admin' ? 'active' : ''}" data-srch-mode="admin">ادمین سرچ<small>SRCH-11</small></button></div>
+    <div class="prd-tabs"><button type="button" class="${ui.mode === 'shop' ? 'active' : ''}" data-srch-mode="shop">ویترین<small>SRCH</small></button><button type="button" class="${ui.mode === 'admin' ? 'active' : ''}" data-srch-mode="admin">مدیریت سرچ<small>SRCH-11</small></button></div>
     ${ui.mode === 'admin' ? admin() : shop()}
   </div>`;
 }
@@ -317,6 +327,20 @@ export function bindSearch(render) {
   });
   document.querySelectorAll('[data-srch-map-del]').forEach((button) => button.addEventListener('click', () => {
     ui.maps.splice(Number(button.dataset.srchMapDel), 1);
+    persist();
+    render();
+  }));
+  document.querySelector('[data-srch-alias]')?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(event.target);
+    const term = String(data.get('term') || '').trim();
+    const productId = String(data.get('productId') || '');
+    if (term && productId) ui.aliases.push({ term, productId });
+    persist();
+    render();
+  });
+  document.querySelectorAll('[data-srch-alias-del]').forEach((button) => button.addEventListener('click', () => {
+    ui.aliases.splice(Number(button.dataset.srchAliasDel), 1);
     persist();
     render();
   }));
