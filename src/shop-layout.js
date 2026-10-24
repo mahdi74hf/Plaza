@@ -16,6 +16,13 @@ const GROUP_ICONS = [
   ['sport', 'ورزش'],
 ];
 
+function groupIconMarkup(group) {
+  if (group?.icon === 'custom' && group.iconSrc) {
+    return `<img class="shop-group-icon is-file" src="${escape(group.iconSrc)}" alt="" />`;
+  }
+  return groupIcon(group?.icon);
+}
+
 function groupIcon(iconId) {
   const paths = {
     mobile: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
@@ -184,7 +191,8 @@ function normalizeGroup(group) {
     id: group.id,
     title: group.title || '',
     description: group.description || '',
-    icon: GROUP_ICONS.some(([id]) => id === group.icon) ? group.icon : '',
+    iconSrc: typeof group.iconSrc === 'string' && group.iconSrc.startsWith('data:image/') ? group.iconSrc : '',
+    icon: GROUP_ICONS.some(([id]) => id === group.icon) ? group.icon : (typeof group.iconSrc === 'string' && group.iconSrc.startsWith('data:image/') ? 'custom' : ''),
     items: (group.items || []).map((item) => ({
       ...normalizeLink(item, true),
       id: item.id,
@@ -421,7 +429,7 @@ function editorView() {
     ${shopLayoutState.notice ? `<div class="validation-box">${escape(shopLayoutState.notice)}</div>` : ''}
     ${shopLayoutState.data.groups.map((group, index) => `<section class="card shop-layout-group ${group.hidden ? 'is-hidden' : ''}">
       <header>
-        <div><span class="type-pill">سطح ۱ · ${destinationKind(group)}</span><h2>${groupIcon(group.icon)}${escape(group.title || 'Group بدون عنوان')}</h2><p>${escape(group.description || '')}</p></div>
+        <div><span class="type-pill">سطح ۱ · ${destinationKind(group)}</span><h2>${groupIconMarkup(group)}${escape(group.title || 'Group بدون عنوان')}</h2><p>${escape(group.description || '')}</p></div>
         <div class="detail-actions">
           <button type="button" class="action-button" data-action="shp-group-up" data-group="${group.id}" ${index === 0 ? 'disabled' : ''}>↑</button>
           <button type="button" class="action-button" data-action="shp-group-down" data-group="${group.id}">↓</button>
@@ -436,6 +444,10 @@ function editorView() {
           <div>
             <button type="button" class="shop-icon-option ${group.icon ? '' : 'is-selected'}" data-action="shp-set-icon" data-group="${group.id}" data-icon="" aria-label="بدون آیکون">—</button>
             ${GROUP_ICONS.map(([iconId, label]) => `<button type="button" class="shop-icon-option ${group.icon === iconId ? 'is-selected' : ''}" data-action="shp-set-icon" data-group="${group.id}" data-icon="${iconId}" aria-label="${label}">${groupIcon(iconId)}</button>`).join('')}
+            <label class="shop-icon-upload ${group.icon === 'custom' ? 'is-selected' : ''}">
+              ${group.icon === 'custom' ? groupIconMarkup(group) : 'بارگذاری'}
+              <input type="file" accept="image/png,image/svg+xml,image/webp,image/jpeg,.svg" data-shp-icon-file="1" data-group="${group.id}" aria-label="بارگذاری آیکون" />
+            </label>
           </div>
         </div>
         <label class="field"><span>توضیح اختیاری</span><input data-shp-group-field="description" data-group="${group.id}" value="${escape(group.description)}"/></label>
@@ -472,8 +484,8 @@ function previewView() {
       ${groups.length ? groups.map((group) => `<section class="shop-customer-group">
         <header>
           ${group.destType && validLink(group, false)
-            ? `<button type="button" class="shop-level1-link" ${previewAttrs(group)}>${groupIcon(group.icon)}${escape(group.title)} <span>←</span></button>`
-            : `<h2>${groupIcon(group.icon)}${escape(group.title)}</h2>`}
+            ? `<button type="button" class="shop-level1-link" ${previewAttrs(group)}>${groupIconMarkup(group)}${escape(group.title)} <span>←</span></button>`
+            : `<h2>${groupIconMarkup(group)}${escape(group.title)}</h2>`}
           ${group.description ? `<p>${escape(group.description)}</p>` : ''}
           <span>${group.destType && validLink(group, false) ? escape(destinationLabel(group)) : 'عنوان غیرقابل‌کلیک'}</span>
         </header>
@@ -568,6 +580,7 @@ export function handleShopLayoutClick(action, host, rerender) {
   if (action === 'shp-toggle-group' && group) group.hidden = !group.hidden;
   if (action === 'shp-set-icon' && group) {
     group.icon = GROUP_ICONS.some(([iconId]) => iconId === host.dataset.icon) ? host.dataset.icon : '';
+    group.iconSrc = '';
   }
   if (action === 'shp-group-up' || action === 'shp-group-down') move(shopLayoutState.data.groups, host.dataset.group, action.endsWith('up') ? -1 : 1);
   if (action === 'shp-add-level2' && group) {
@@ -599,6 +612,27 @@ export function handleShopLayoutClick(action, host, rerender) {
 }
 
 export function handleShopLayoutChange(target, rerender) {
+  if (target.dataset.shpIconFile) {
+    const group = shopLayoutState.data.groups.find((entry) => entry.id === target.dataset.group);
+    const file = target.files?.[0];
+    if (!group || !file) return true;
+    if (!file.type.startsWith('image/') || file.size > 300 * 1024) {
+      shopLayoutState.notice = 'آیکون باید تصویر باشد و حجمش کمتر از ۳۰۰ کیلوبایت.';
+      rerender();
+      return true;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      group.icon = 'custom';
+      group.iconSrc = String(reader.result || '');
+      shopLayoutState.data.status = 'draft';
+      shopLayoutState.notice = '';
+      persist();
+      rerender();
+    };
+    reader.readAsDataURL(file);
+    return true;
+  }
   if (target.dataset.shpGroupField) {
     const group = shopLayoutState.data.groups.find((entry) => entry.id === target.dataset.group);
     if (group) {

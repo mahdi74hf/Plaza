@@ -1431,9 +1431,26 @@ svg {
   color: var(--ds-text);
   cursor: pointer;
 }
-.shop-icon-option.is-selected {
+.shop-icon-option.is-selected,
+.shop-icon-upload.is-selected {
   border-color: var(--primary);
   background: var(--ds-brand-soft, #e7f6ef);
+}
+.shop-icon-upload {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px dashed var(--ds-border-input);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-ui);
+  color: var(--ds-text);
+  font-size: var(--ds-text-xs);
+  cursor: pointer;
+}
+.shop-icon-upload input {
+  display: none;
 }
 .shop-group-icon {
   width: 18px;
@@ -1443,6 +1460,10 @@ svg {
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+.shop-group-icon.is-file {
+  stroke: none;
+  object-fit: contain;
 }
 .shop-layout-group > header p {
   margin: 0;
