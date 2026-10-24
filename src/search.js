@@ -1,7 +1,7 @@
 import { brandById, catalog, fa, normalize, sellable, toman } from './catalog.js';
 import { findNode } from './tree.js';
 
-const KEY = 'plaza-search-demo-v1';
+const KEY = 'plaza-search-demo-v2';
 
 const extras = [
   {
@@ -15,7 +15,7 @@ const extras = [
     brandId: 'samsung',
     sales: 80,
     skus: [{ code: 'PLAZA-GLASS-S25', price: 290_000, stock: 20, reserved: 0 }],
-    aliases: ['محافظ صفحه'],
+    aliases: [],
   },
   {
     id: 'case',
@@ -32,15 +32,10 @@ const extras = [
   },
 ];
 
-const aliases = {
-  iphone: ['آیفون', 'iphone'],
-  galaxy: ['گلکسی'],
-  redmi: ['ردمی'],
-};
-
-const synonyms = [
-  ['گوشی', 'موبایل'],
-  ['هندزفری', 'هدفون'],
+const defaultMaps = [
+  { from: 'کلس', to: 'گلس', both: false },
+  { from: 'کلش', to: 'گلس', both: false },
+  { from: 'گوشی', to: 'موبایل', both: true },
 ];
 
 function load() {
@@ -63,7 +58,7 @@ const ui = {
   notice: '',
   recents: saved.recents || ['آیفون', 'گلکسی'],
   counts: saved.counts || { موبایل: 42, گلس: 28, بخاری: 17, آیفون: 15 },
-  spells: saved.spells || [{ from: 'کلس', to: 'گلس' }],
+  maps: saved.maps || defaultMaps,
   rules: saved.rules || [],
   log: saved.log || [],
 };
@@ -72,7 +67,7 @@ function persist() {
   localStorage.setItem(KEY, JSON.stringify({
     recents: ui.recents,
     counts: ui.counts,
-    spells: ui.spells,
+    maps: ui.maps,
     rules: ui.rules,
     log: ui.log.slice(0, 30),
   }));
@@ -88,7 +83,7 @@ function products() {
       ...item,
       leafName: findNode(item.leafId)?.node?.name || item.leafId,
       kind: item.leafId === 'phone' ? 'phone' : 'other',
-      aliases: aliases[item.id] || [],
+      aliases: [],
     })),
     ...extras,
   ];
@@ -102,19 +97,22 @@ function bestSku(item) {
 function expandQuery(raw) {
   let text = normalize(raw);
   const applied = [];
-  ui.spells.forEach((rule) => {
+  ui.maps.forEach((rule) => {
     const from = normalize(rule.from);
     const to = normalize(rule.to);
-    if (!from || !to) return;
+    if (!from || !to || rule.both) return;
     if (text === from || text.split(' ').includes(from)) {
       text = text.split(' ').map((part) => (part === from ? to : part)).join(' ');
       applied.push(`${rule.from} ← ${rule.to}`);
     }
   });
   const words = new Set(text.split(' ').filter(Boolean));
-  synonyms.forEach(([a, b]) => {
-    if (words.has(a)) words.add(b);
-    if (words.has(b)) words.add(a);
+  ui.maps.forEach((rule) => {
+    if (!rule.both) return;
+    const from = normalize(rule.from);
+    const to = normalize(rule.to);
+    if (words.has(from)) words.add(to);
+    if (words.has(to)) words.add(from);
   });
   return { text, words: [...words], applied };
 }
@@ -135,7 +133,7 @@ function score(item, expanded, raw) {
     why = 'عنوان کامل';
   } else if ([item.model, brandById(item.brandId)?.name, ...(item.aliases || [])].some((part) => part && (normalize(part) === expanded.text || compact(part) === qCompact))) {
     rank = 600;
-    why = 'مدل، برند یا Alias';
+    why = 'مدل یا برند';
   } else if (qCompact.length >= 2 && (bag.includes(qCompact) || expanded.words.some((word) => word.length >= 2 && bag.includes(compact(word))))) {
     rank = 200;
     why = 'تطابق جزئی';
@@ -212,7 +210,7 @@ function shop() {
     ${expanded?.applied.length ? `<p class="srch-fix">اصلاح شد: ${expanded.applied.map(escape).join('، ')}. عبارت جست‌وجو: ${escape(expanded.text)}</p>` : ''}
     ${showSuggest ? `<div class="srch-suggest"><div><b>${suggestionLabel}</b>${ui.loggedIn && ui.recents.length ? '<button type="button" data-srch-clear-all>حذف همه</button>' : ''}</div>${suggestions.map((item) => `<span><button type="button" data-srch-pick="${escape(item)}">${escape(item)}</button>${ui.loggedIn && ui.recents.length ? `<button type="button" data-srch-del="${escape(item)}" aria-label="حذف">×</button>` : ''}</span>`).join('')}</div>` : ''}
     ${compact(ui.query).length >= 2 ? `<div class="srch-tools"><span>${fa(rows.length)} محصول</span><label><input type="checkbox" data-srch-stock ${ui.onlyStock ? 'checked' : ''} /> فقط موجود</label><select data-srch-sort><option value="relevance" ${ui.sort === 'relevance' ? 'selected' : ''}>مرتبط‌ترین</option><option value="cheap" ${ui.sort === 'cheap' ? 'selected' : ''}>ارزان‌ترین</option><option value="expensive" ${ui.sort === 'expensive' ? 'selected' : ''}>گران‌ترین</option><option value="bestseller" ${ui.sort === 'bestseller' ? 'selected' : ''}>پرفروش‌ترین</option></select></div>
-    <div class="srch-grid">${rows.length ? rows.map(card).join('') : '<p class="srch-empty">نتیجه‌ای پیدا نشد. عبارت را عوض کن.</p>'}</div>` : '<div class="srch-hints"><b>چند عبارت را امتحان کن</b><button type="button" data-srch-pick="موبایل">موبایل</button><button type="button" data-srch-pick="گ   وشی موبایل">گ   وشی موبایل</button><button type="button" data-srch-pick="کلس">کلس</button><button type="button" data-srch-pick="آیفون">آیفون</button><button type="button" data-srch-pick="PLAZA-IPHONE-BLK-256">SKU آیفون</button></div>'}
+    <div class="srch-grid">${rows.length ? rows.map(card).join('') : '<p class="srch-empty">نتیجه‌ای پیدا نشد. عبارت را عوض کن.</p>'}</div>` : '<div class="srch-hints"><b>چند عبارت را امتحان کن</b><button type="button" data-srch-pick="موبایل">موبایل</button><button type="button" data-srch-pick="گ   وشی موبایل">گ   وشی موبایل</button><button type="button" data-srch-pick="کلس">کلس</button><button type="button" data-srch-pick="کلش">کلش</button><button type="button" data-srch-pick="آیفون">آیفون</button><button type="button" data-srch-pick="PLAZA-IPHONE-BLK-256">SKU آیفون</button></div>'}
     ${ui.notice ? `<p class="srch-note">${escape(ui.notice)}</p>` : ''}
   </section>`;
 }
@@ -231,15 +229,24 @@ function admin() {
   const top = popular();
   const zero = ui.log.filter((row) => row.hits === 0);
   return `<section class="srch">
-    <div class="srch-top"><div><span class="eyebrow">ADMIN · PRD-004</span><h1>گزارش و قانون سرچ</h1><p>اصلاح املا و وصل کردن عبارت به یک دسته.</p></div></div>
+    <div class="srch-top"><div><span class="eyebrow">ADMIN · PRD-004</span><h1>همسان‌سازی سرچ</h1><p>هر عبارتی که مشتری می‌زند را به کلمه‌ای که باید جست‌وجو شود وصل کن. Alias جدا تعریف نشده؛ همین جدول است.</p></div></div>
+    <article class="srch-map">
+      <form data-srch-map>
+        <input name="from" placeholder="عبارت مشتری، مثل کلش" />
+        <input name="to" placeholder="جست‌وجو شود، مثل گلس" />
+        <label><input type="checkbox" name="both" /> دو طرفه</label>
+        <button class="primary" type="submit">افزودن</button>
+      </form>
+      <table>
+        <thead><tr><th>مشتری می‌زند</th><th>جست‌وجو می‌شود</th><th>جهت</th><th></th></tr></thead>
+        <tbody>${ui.maps.map((rule, index) => `<tr><td>${escape(rule.from)}</td><td>${escape(rule.to)}</td><td>${rule.both ? 'هر دو طرف' : 'فقط همین جهت'}</td><td><button type="button" data-srch-map-del="${index}">حذف</button></td></tr>`).join('')}</tbody>
+      </table>
+      <p>یک‌طرفه یعنی «کلش» همان «گلس» است و در کادر اصلاح می‌شود. دو طرفه یعنی «گوشی» و «موبایل» هر دو یک جست‌وجو هستند و عبارت مشتری عوض نمی‌شود.</p>
+    </article>
     <div class="srch-admin">
       <article><h2>پرجستجو</h2>${top.map(([query, count]) => `<p>${escape(query)} <b>${fa(count)}</b></p>`).join('') || '<p>هنوز جست‌وجویی نیست.</p>'}</article>
       <article><h2>بدون نتیجه</h2>${zero.length ? zero.slice(0, 6).map((row) => `<p>${escape(row.query)} <small>${escape(row.at)}</small></p>`).join('') : '<p>موردی نیست.</p>'}</article>
-      <article><h2>اصلاح املا</h2>
-        <form data-srch-spell><input name="from" placeholder="کلس" /><input name="to" placeholder="گلس" /><button class="primary" type="submit">افزودن</button></form>
-        ${ui.spells.map((rule, index) => `<p>${escape(rule.from)} ← ${escape(rule.to)} <button type="button" data-srch-spell-del="${index}">حذف</button></p>`).join('')}
-      </article>
-      <article><h2>عبارت به دسته</h2>
+      <article class="srch-span"><h2>عبارت به دسته</h2>
         <form data-srch-rule><input name="query" placeholder="گلس" /><select name="leafId"><option value="phone-accessory">لوازم جانبی موبایل</option><option value="phone">گوشی موبایل</option><option value="gas-heater">بخاری گازی</option></select><button class="primary" type="submit">افزودن</button></form>
         ${ui.rules.map((rule, index) => `<p>${escape(rule.query)} ← ${escape(rule.leafName)} <button type="button" data-srch-rule-del="${index}">حذف</button></p>`).join('') || '<p>قانونی نیست. «گلس» را به لوازم جانبی وصل کن و در ویترین «گلس» را بزن.</p>'}
       </article>
@@ -308,17 +315,17 @@ export function bindSearch(render) {
     ui.notice = row ? `در صفحه محصول قیمت همان ${money(row.sku)} نشان داده می‌شود.` : '';
     render();
   }));
-  document.querySelector('[data-srch-spell]')?.addEventListener('submit', (event) => {
+  document.querySelector('[data-srch-map]')?.addEventListener('submit', (event) => {
     event.preventDefault();
     const data = new FormData(event.target);
     const from = String(data.get('from') || '').trim();
     const to = String(data.get('to') || '').trim();
-    if (from && to) ui.spells.push({ from, to });
+    if (from && to) ui.maps.push({ from, to, both: data.get('both') === 'on' });
     persist();
     render();
   });
-  document.querySelectorAll('[data-srch-spell-del]').forEach((button) => button.addEventListener('click', () => {
-    ui.spells.splice(Number(button.dataset.srchSpellDel), 1);
+  document.querySelectorAll('[data-srch-map-del]').forEach((button) => button.addEventListener('click', () => {
+    ui.maps.splice(Number(button.dataset.srchMapDel), 1);
     persist();
     render();
   }));

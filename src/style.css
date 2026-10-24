@@ -1773,7 +1773,13 @@ svg {
 .srch-card em.ok { color: var(--ds-success-text); }
 .srch-card button, .srch-admin .primary { width: auto; margin: 0; }
 .srch-fix, .srch-note, .srch-empty { margin: 0; }
-.srch-admin form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.srch-map { background: var(--ds-ui); border: 1px solid var(--ds-border-subtle); border-radius: var(--ds-radius-lg); padding: 16px; display: grid; gap: 12px; }
+.srch-map form, .srch-admin form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0; }
+.srch-map table { width: 100%; border-collapse: collapse; }
+.srch-map th, .srch-map td { text-align: right; padding: 8px; border-bottom: 1px solid var(--ds-border-subtle); }
+.srch-map p, .srch-admin p { margin: 6px 0; }
+.srch-span { grid-column: 1 / -1; }
+.srch-admin form { margin-bottom: 8px; }
 .srch-admin input, .srch-admin select { min-height: var(--ds-control-h); border: 1px solid var(--ds-border-input); border-radius: var(--ds-radius-md); padding: 0 8px; font: inherit; }
 .srch-login { display: flex; gap: 8px; align-items: center; }
 @media (max-width: 800px) { .srch-grid, .srch-admin { grid-template-columns: 1fr; } }
