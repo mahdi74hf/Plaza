@@ -59,7 +59,6 @@ const ui = {
   recents: saved.recents || ['آیفون', 'گلکسی'],
   counts: saved.counts || { موبایل: 42, گلس: 28, بخاری: 17, آیفون: 15 },
   maps: saved.maps || defaultMaps,
-  rules: saved.rules || [],
   log: saved.log || [],
 };
 
@@ -68,7 +67,6 @@ function persist() {
     recents: ui.recents,
     counts: ui.counts,
     maps: ui.maps,
-    rules: ui.rules,
     log: ui.log.slice(0, 30),
   }));
 }
@@ -147,10 +145,7 @@ function score(item, expanded, raw) {
   if (asksPhone && !asksAccessory && item.kind === 'phone') rank += 120;
   if (asksPhone && !asksAccessory && item.kind === 'accessory') rank -= 40;
 
-  const rule = ui.rules.find((row) => normalize(row.query) === expanded.text || compact(row.query) === qCompact);
-  if (rule && item.leafId === rule.leafId) rank += 300;
-
-  return { item, sku, rank, why, stock: sku ? sellable(sku) : 0, rule };
+  return { item, sku, rank, why, stock: sku ? sellable(sku) : 0 };
 }
 
 function results() {
@@ -246,10 +241,6 @@ function admin() {
     <div class="srch-admin">
       <article><h2>پرجستجو</h2>${top.map(([query, count]) => `<p>${escape(query)} <b>${fa(count)}</b></p>`).join('') || '<p>هنوز جست‌وجویی نیست.</p>'}</article>
       <article><h2>بدون نتیجه</h2>${zero.length ? zero.slice(0, 6).map((row) => `<p>${escape(row.query)} <small>${escape(row.at)}</small></p>`).join('') : '<p>موردی نیست.</p>'}</article>
-      <article class="srch-span"><h2>عبارت به دسته</h2>
-        <form data-srch-rule><input name="query" placeholder="گلس" /><select name="leafId"><option value="phone-accessory">لوازم جانبی موبایل</option><option value="phone">گوشی موبایل</option><option value="gas-heater">بخاری گازی</option></select><button class="primary" type="submit">افزودن</button></form>
-        ${ui.rules.map((rule, index) => `<p>${escape(rule.query)} ← ${escape(rule.leafName)} <button type="button" data-srch-rule-del="${index}">حذف</button></p>`).join('') || '<p>قانونی نیست. «گلس» را به لوازم جانبی وصل کن و در ویترین «گلس» را بزن.</p>'}
-      </article>
     </div>
   </section>`;
 }
@@ -326,21 +317,6 @@ export function bindSearch(render) {
   });
   document.querySelectorAll('[data-srch-map-del]').forEach((button) => button.addEventListener('click', () => {
     ui.maps.splice(Number(button.dataset.srchMapDel), 1);
-    persist();
-    render();
-  }));
-  document.querySelector('[data-srch-rule]')?.addEventListener('submit', (event) => {
-    event.preventDefault();
-    const data = new FormData(event.target);
-    const query = String(data.get('query') || '').trim();
-    const leafId = String(data.get('leafId') || '');
-    const leafName = event.target.querySelector('select')?.selectedOptions[0]?.textContent || leafId;
-    if (query) ui.rules.push({ query, leafId, leafName });
-    persist();
-    render();
-  });
-  document.querySelectorAll('[data-srch-rule-del]').forEach((button) => button.addEventListener('click', () => {
-    ui.rules.splice(Number(button.dataset.srchRuleDel), 1);
     persist();
     render();
   }));
