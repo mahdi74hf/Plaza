@@ -1513,20 +1513,20 @@ svg {
 }
 .shop-layout-fields {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) 160px minmax(180px, 1.4fr) 1fr 1fr;
+  grid-template-columns: minmax(140px, 1fr) 160px minmax(180px, 1.4fr) 1fr 1fr 1fr;
   gap: 10px;
 }
 .shop-layout-fields.is-landing {
   grid-template-columns: minmax(140px, 1fr) 160px minmax(220px, 1.6fr);
 }
 .shop-layout-fields.group-fields {
-  grid-template-columns: 1fr 1fr 160px;
+  grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr) 160px;
 }
 .shop-layout-fields.group-fields.is-leaf {
-  grid-template-columns: 1fr 1fr 160px minmax(180px, 1.4fr) 1fr 1fr;
+  grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr) 160px minmax(180px, 1.4fr) 1fr 1fr 1fr;
 }
 .shop-layout-fields.group-fields.is-landing {
-  grid-template-columns: 1fr 1fr 160px minmax(220px, 1.6fr);
+  grid-template-columns: minmax(140px, 1fr) auto minmax(140px, 1fr) 160px minmax(220px, 1.6fr);
 }
 .shop-layout-fields .field {
   margin: 0;

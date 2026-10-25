@@ -1,7 +1,7 @@
 import { catalog, logChange, persistCatalog } from './catalog.js';
 import { pathLabel, publicLeaves } from './tree.js';
 
-const STORAGE_KEY = 'plaza-shop-layout-v5';
+const STORAGE_KEY = 'plaza-shop-layout-v6';
 
 const GROUP_ICONS = [
   ['mobile', 'موبایل'],
@@ -58,13 +58,14 @@ const seedLayout = {
     {
       id: 'group-heating',
       title: 'لوازم گرمایشی',
-      description: 'انتخاب سریع براساس برند، مدل یا کمپین',
+      description: 'انتخاب سریع براساس برند، تگ، نوع یا کمپین',
       icon: 'heater',
       destType: 'landing',
       nodeId: '',
       landingId: 'landing-heating',
       brandId: '',
-      modelId: '',
+      tagId: '',
+      typeId: '',
       hidden: false,
       items: [
         {
@@ -74,7 +75,8 @@ const seedLayout = {
           nodeId: 'electric-heater',
           landingId: '',
           brandId: 'barfab',
-          modelId: '',
+          tagId: '',
+          typeId: 'main',
           hidden: false,
           children: [
             {
@@ -84,7 +86,8 @@ const seedLayout = {
               nodeId: 'electric-heater',
               landingId: '',
               brandId: 'barfab',
-              modelId: 'QH-3000',
+              tagId: 'new',
+              typeId: 'main',
               hidden: false,
             },
             {
@@ -94,7 +97,8 @@ const seedLayout = {
               nodeId: 'gas-heater',
               landingId: '',
               brandId: 'barfab',
-              modelId: 'BF-15',
+              tagId: 'sale',
+              typeId: 'main',
               hidden: false,
             },
           ],
@@ -106,7 +110,8 @@ const seedLayout = {
           nodeId: 'gas-heater',
           landingId: '',
           brandId: 'energy',
-          modelId: '',
+          tagId: '',
+          typeId: 'main',
           hidden: false,
           children: [
             {
@@ -116,7 +121,8 @@ const seedLayout = {
               nodeId: 'gas-heater',
               landingId: '',
               brandId: 'energy',
-              modelId: 'GH-0618',
+              tagId: 'online',
+              typeId: 'main',
               hidden: false,
             },
           ],
@@ -128,7 +134,8 @@ const seedLayout = {
           nodeId: '',
           landingId: 'landing-heating',
           brandId: '',
-          modelId: '',
+          tagId: '',
+          typeId: '',
           hidden: false,
           children: [
             {
@@ -138,7 +145,8 @@ const seedLayout = {
               nodeId: '',
               landingId: 'landing-black-friday',
               brandId: '',
-              modelId: '',
+              tagId: '',
+              typeId: '',
               hidden: false,
             },
           ],
@@ -156,49 +164,47 @@ export const shopLayoutState = {
 };
 
 function emptyDestination() {
-  return { destType: '', nodeId: '', landingId: '', brandId: '', modelId: '' };
+  return { destType: 'leaf', nodeId: '', landingId: '', brandId: '', tagId: '', typeId: '' };
 }
 
-function normalizeLink(item, required = false) {
+function normalizeLink(item) {
+  const destType = item.destType === 'landing' || item.landingId ? 'landing' : 'leaf';
   const next = {
     ...emptyDestination(),
     ...item,
-    destType: item.destType || (item.nodeId ? 'leaf' : item.landingId ? 'landing' : required ? 'leaf' : ''),
+    destType,
     nodeId: item.nodeId || '',
     landingId: item.landingId || '',
     brandId: item.brandId || '',
-    modelId: item.modelId || '',
+    tagId: item.tagId || '',
+    typeId: item.typeId || '',
     hidden: !!item.hidden,
   };
+  delete next.modelId;
   if (next.destType === 'leaf') next.landingId = '';
   if (next.destType === 'landing') {
     next.nodeId = '';
     next.brandId = '';
-    next.modelId = '';
-  }
-  if (!next.destType) {
-    next.nodeId = '';
-    next.landingId = '';
-    next.brandId = '';
-    next.modelId = '';
+    next.tagId = '';
+    next.typeId = '';
   }
   return next;
 }
 
 function normalizeGroup(group) {
   const next = {
-    ...normalizeLink(group, false),
+    ...normalizeLink(group),
     id: group.id,
     title: group.title || '',
     description: group.description || '',
     iconSrc: typeof group.iconSrc === 'string' && group.iconSrc.startsWith('data:image/') ? group.iconSrc : '',
     icon: GROUP_ICONS.some(([id]) => id === group.icon) ? group.icon : (typeof group.iconSrc === 'string' && group.iconSrc.startsWith('data:image/') ? 'custom' : ''),
     items: (group.items || []).map((item) => ({
-      ...normalizeLink(item, true),
+      ...normalizeLink(item),
       id: item.id,
       title: item.title || '',
       children: (item.children || []).map((child) => ({
-        ...normalizeLink(child, true),
+        ...normalizeLink(child),
         id: child.id,
         title: child.title || '',
       })),
@@ -261,17 +267,26 @@ function brandName(brandId) {
   return catalog.brands.find((brand) => brand.id === brandId)?.name || brandId;
 }
 
-function modelsFor(nodeId, brandId) {
-  const seen = new Map();
-  catalog.products.forEach((product) => {
-    if (!product.model || product.status !== 'published') return;
-    if (nodeId && product.leafId !== nodeId) return;
-    if (brandId && product.brandId !== brandId) return;
-    if (!seen.has(product.model)) {
-      seen.set(product.model, { id: product.model, title: product.title });
-    }
-  });
-  return [...seen.values()];
+const SHOP_TYPES = [
+  { id: 'main', label: 'کالای اصلی' },
+  { id: 'accessory', label: 'لوازم جانبی' },
+];
+
+function marketingTags() {
+  return catalog.marketingTags?.length ? catalog.marketingTags : [
+    { id: 'new', label: 'جدید' },
+    { id: 'sale', label: 'حراج' },
+    { id: 'bundle', label: 'پیشنهاد ویژه' },
+    { id: 'online', label: 'فقط آنلاین' },
+  ];
+}
+
+function tagName(tagId) {
+  return marketingTags().find((tag) => tag.id === tagId)?.label || tagId;
+}
+
+function typeName(typeId) {
+  return SHOP_TYPES.find((item) => item.id === typeId)?.label || typeId;
 }
 
 function validLeaf(nodeId) {
@@ -282,24 +297,27 @@ function validLanding(landingId) {
   return publishedLandings().some((landing) => landing.id === landingId);
 }
 
-function validModel(nodeId, brandId, modelId) {
-  if (!modelId) return true;
-  return modelsFor(nodeId, brandId).some((model) => model.id === modelId);
+function validTag(tagId) {
+  if (!tagId) return true;
+  return marketingTags().some((tag) => tag.id === tagId);
 }
 
-function validLink(item, required) {
-  if (!item.destType) return !required;
+function validType(typeId) {
+  if (!typeId) return true;
+  return SHOP_TYPES.some((item) => item.id === typeId);
+}
+
+function validLink(item) {
   if (item.destType === 'leaf') {
-    return validLeaf(item.nodeId) && validModel(item.nodeId, item.brandId, item.modelId);
+    return validLeaf(item.nodeId) && validTag(item.tagId) && validType(item.typeId);
   }
   if (item.destType === 'landing') return validLanding(item.landingId);
   return false;
 }
 
-function destTypeOptions(selected, required) {
-  return `${required ? '' : '<option value="">بدون لینک</option>'}
-    <option value="leaf" ${selected === 'leaf' ? 'selected' : ''}>LeafCat / PLP</option>
-    <option value="landing" ${selected === 'landing' ? 'selected' : ''}>لندینگ منتشرشده</option>`;
+function destTypeOptions(selected) {
+  return `<option value="leaf" ${selected === 'leaf' ? 'selected' : ''}>LeafCat</option>
+    <option value="landing" ${selected === 'landing' ? 'selected' : ''}>لندینگ</option>`;
 }
 
 function leafOptions(selected) {
@@ -321,10 +339,15 @@ function brandOptions(selected) {
     .join('')}`;
 }
 
-function modelOptions(selected, nodeId, brandId) {
-  const models = modelsFor(nodeId, brandId);
-  return `<option value="">بدون Filter مدل</option>${models
-    .map((model) => `<option value="${escape(model.id)}" ${selected === model.id ? 'selected' : ''}>${escape(model.id)} · ${escape(model.title)}</option>`)
+function tagOptions(selected) {
+  return `<option value="">بدون Filter تگ</option>${marketingTags()
+    .map((tag) => `<option value="${tag.id}" ${selected === tag.id ? 'selected' : ''}>${escape(tag.label)}</option>`)
+    .join('')}`;
+}
+
+function typeOptions(selected) {
+  return `<option value="">بدون Filter نوع</option>${SHOP_TYPES
+    .map((item) => `<option value="${item.id}" ${selected === item.id ? 'selected' : ''}>${escape(item.label)}</option>`)
     .join('')}`;
 }
 
@@ -336,28 +359,28 @@ function destinationLabel(item) {
   if (item.destType === 'leaf') {
     const filters = [
       item.brandId ? `برند ${brandName(item.brandId)}` : '',
-      item.modelId ? `مدل ${item.modelId}` : '',
+      item.tagId ? `تگ ${tagName(item.tagId)}` : '',
+      item.typeId ? `نوع ${typeName(item.typeId)}` : '',
     ].filter(Boolean).join(' · ');
     return `${pathLabel(item.nodeId) || 'LeafCat نامعتبر'}${filters ? ` · ${filters}` : ''}`;
   }
-  return 'بدون لینک';
+  return 'مقصد نامعتبر';
 }
 
 function destinationKind(item) {
   if (item.destType === 'landing') return 'لندینگ';
-  if (item.destType === 'leaf') return 'قابل‌کلیک · LeafCat';
-  return 'بدون لینک';
+  return 'قابل‌کلیک · LeafCat';
 }
 
 function duplicateKey(item) {
-  return [item.title.trim(), item.destType, item.nodeId, item.landingId, item.brandId || '', item.modelId || ''].join('|');
+  return [item.title.trim(), item.destType, item.nodeId, item.landingId, item.brandId || '', item.tagId || '', item.typeId || ''].join('|');
 }
 
 function validationErrors() {
   const errors = [];
   shopLayoutState.data.groups.forEach((group) => {
     if (!group.title.trim()) errors.push('عنوان یک Group خالی است.');
-    if (group.destType && !validLink(group, false)) {
+    if (!validLink(group)) {
       errors.push(`مقصد سطح اول «${group.title || 'بدون عنوان'}» معتبر نیست.`);
     }
     const seen = new Set();
@@ -365,7 +388,7 @@ function validationErrors() {
       const key = duplicateKey(item);
       if (seen.has(key)) errors.push(`Item تکراری در «${group.title}»: ${item.title}`);
       seen.add(key);
-      if (!item.hidden && (!item.title.trim() || !validLink(item, true))) {
+      if (!item.hidden && (!item.title.trim() || !validLink(item))) {
         errors.push(`مقصد سطح دوم «${item.title || 'بدون عنوان'}» معتبر نیست.`);
       }
       const childSeen = new Set();
@@ -373,7 +396,7 @@ function validationErrors() {
         const childKey = duplicateKey(child);
         if (childSeen.has(childKey)) errors.push(`Item سطح سوم تکراری: ${child.title}`);
         childSeen.add(childKey);
-        if (!child.hidden && (!child.title.trim() || !validLink(child, true))) {
+        if (!child.hidden && (!child.title.trim() || !validLink(child))) {
           errors.push(`مقصد سطح سوم «${child.title || 'بدون عنوان'}» معتبر نیست.`);
         }
       });
@@ -382,26 +405,27 @@ function validationErrors() {
   return errors;
 }
 
-function destinationFields(item, groupId, parentId = '', required = true) {
+function destinationFields(item, groupId, parentId = '') {
   const leaf = item.destType === 'leaf';
   const landing = item.destType === 'landing';
   const field = (name) => `data-shp-field="${name}" data-group="${groupId}" data-parent="${parentId}" data-id="${item.id}"`;
   return `
-    <label class="field"><span>نوع مقصد</span><select ${field('destType')}>${destTypeOptions(item.destType, required)}</select></label>
+    <label class="field"><span>نوع مقصد</span><select ${field('destType')}>${destTypeOptions(item.destType)}</select></label>
     ${leaf ? `<label class="field"><span>LeafCat مقصد</span><select ${field('nodeId')}>${leafOptions(item.nodeId)}</select></label>
       <label class="field"><span>Filter برند</span><select ${field('brandId')}>${brandOptions(item.brandId)}</select></label>
-      <label class="field"><span>Filter مدل</span><select ${field('modelId')}>${modelOptions(item.modelId, item.nodeId, item.brandId)}</select></label>` : ''}
+      <label class="field"><span>Filter تگ</span><select ${field('tagId')}>${tagOptions(item.tagId)}</select></label>
+      <label class="field"><span>Filter نوع</span><select ${field('typeId')}>${typeOptions(item.typeId)}</select></label>` : ''}
     ${landing ? `<label class="field"><span>لندینگ منتشرشده</span><select ${field('landingId')}>${landingOptions(item.landingId)}</select></label>` : ''}
   `;
 }
 
 function linkEditor(item, level, groupId, parentId = '') {
-  const invalid = !validLink(item, true);
+  const invalid = !validLink(item);
   return `<article class="shop-layout-item level-${level} ${item.hidden ? 'is-hidden' : ''} ${invalid ? 'is-invalid' : ''}">
     <div class="shop-level-badge">سطح ${level}</div>
     <div class="shop-layout-fields ${item.destType === 'landing' ? 'is-landing' : 'is-leaf'}">
       <label class="field"><span>عنوان نمایشی</span><input data-shp-field="title" data-group="${groupId}" data-parent="${parentId}" data-id="${item.id}" value="${escape(item.title)}"/></label>
-      ${destinationFields(item, groupId, parentId, true)}
+      ${destinationFields(item, groupId, parentId)}
     </div>
     <div class="shop-destination"><b>${invalid ? 'مقصد نامعتبر' : escape(destinationLabel(item))}</b></div>
     <div class="detail-actions">
@@ -420,7 +444,7 @@ function linkEditor(item, level, groupId, parentId = '') {
 function editorView() {
   return `<div class="shop-layout-editor">
     <div class="demo-callout">
-      <div><b>ساختار سه‌سطحی PRD-055 · v0.5</b><p>سطح اول می‌تواند بدون لینک باشد یا به LeafCat / لندینگ منتشرشده وصل شود و آیکون فقط برای همین سطح انتخاب می‌شود. سطح دوم و سوم آیکون ندارند و با عنوان و مقصد ساخته می‌شوند. Filter برند و مدل فقط برای مقصد LeafCat فعال است.</p></div>
+      <div><b>ساختار سه‌سطحی PRD-055 · v0.6</b><p>نوع مقصد فقط LeafCat یا لندینگ است. آیکون فقط برای سطح اول انتخاب می‌شود. Filter برند، تگ و نوع فقط برای مقصد LeafCat فعال است.</p></div>
       <div class="demo-callout-actions">
         <button type="button" class="secondary" data-action="shp-preview">Preview</button>
         <button type="button" class="primary" data-action="shp-publish">انتشار نسخه</button>
@@ -437,7 +461,7 @@ function editorView() {
           <button type="button" class="action-button danger" data-action="shp-delete-group" data-group="${group.id}">حذف</button>
         </div>
       </header>
-      <div class="shop-layout-fields group-fields ${group.destType === 'landing' ? 'is-landing' : group.destType === 'leaf' ? 'is-leaf' : 'is-empty'}">
+      <div class="shop-layout-fields group-fields ${group.destType === 'landing' ? 'is-landing' : 'is-leaf'}">
         <label class="field"><span>عنوان Group</span><input data-shp-group-field="title" data-group="${group.id}" value="${escape(group.title)}"/></label>
         <div class="shop-icon-picker">
           <span>آیکون سطح اول</span>
@@ -451,15 +475,16 @@ function editorView() {
           </div>
         </div>
         <label class="field"><span>توضیح اختیاری</span><input data-shp-group-field="description" data-group="${group.id}" value="${escape(group.description)}"/></label>
-        <label class="field"><span>نوع مقصد</span><select data-shp-group-field="destType" data-group="${group.id}">${destTypeOptions(group.destType, false)}</select></label>
+        <label class="field"><span>نوع مقصد</span><select data-shp-group-field="destType" data-group="${group.id}">${destTypeOptions(group.destType)}</select></label>
         ${group.destType === 'leaf' ? `<label class="field"><span>LeafCat مقصد</span><select data-shp-group-field="nodeId" data-group="${group.id}">${leafOptions(group.nodeId)}</select></label>
           <label class="field"><span>Filter برند</span><select data-shp-group-field="brandId" data-group="${group.id}">${brandOptions(group.brandId)}</select></label>
-          <label class="field"><span>Filter مدل</span><select data-shp-group-field="modelId" data-group="${group.id}">${modelOptions(group.modelId, group.nodeId, group.brandId)}</select></label>` : ''}
+          <label class="field"><span>Filter تگ</span><select data-shp-group-field="tagId" data-group="${group.id}">${tagOptions(group.tagId)}</select></label>
+          <label class="field"><span>Filter نوع</span><select data-shp-group-field="typeId" data-group="${group.id}">${typeOptions(group.typeId)}</select></label>` : ''}
         ${group.destType === 'landing' ? `<label class="field"><span>لندینگ منتشرشده</span><select data-shp-group-field="landingId" data-group="${group.id}">${landingOptions(group.landingId)}</select></label>` : ''}
       </div>
-      <div class="shop-no-link-note">${group.destType && validLink(group, false)
+      <div class="shop-no-link-note">${validLink(group)
         ? `این Group قابل‌کلیک است؛ مقصد: <b>${escape(destinationLabel(group))}</b>`
-        : 'بدون مقصد، این سطح فقط عنوان Group است و قابل‌کلیک نیست.'}</div>
+        : 'مقصد این Group را کامل کن.'}</div>
       <div class="shop-layout-level2">${group.items.map((item) => linkEditor(item, 2, group.id)).join('')}</div>
       <button type="button" class="secondary" data-action="shp-add-level2" data-group="${group.id}">+ افزودن Item سطح دوم</button>
     </section>`).join('')}
@@ -468,11 +493,11 @@ function editorView() {
 }
 
 function previewAttrs(item) {
-  return `data-action="shp-preview-destination" data-dest-type="${item.destType || ''}" data-node="${item.nodeId || ''}" data-landing="${item.landingId || ''}" data-destination-brand="${item.brandId || ''}" data-destination-model="${escape(item.modelId || '')}"`;
+  return `data-action="shp-preview-destination" data-dest-type="${item.destType || ''}" data-node="${item.nodeId || ''}" data-landing="${item.landingId || ''}" data-destination-brand="${item.brandId || ''}" data-destination-tag="${item.tagId || ''}" data-destination-type="${item.typeId || ''}"`;
 }
 
 function previewView() {
-  const groups = shopLayoutState.data.groups.filter((group) => !group.hidden && group.items.some((item) => !item.hidden && validLink(item, true)));
+  const groups = shopLayoutState.data.groups.filter((group) => !group.hidden && group.items.some((item) => !item.hidden && validLink(item)));
   return `<div class="shop-layout-preview-shell ${shopLayoutState.device}">
     <div class="toolbar">
       <button type="button" class="secondary" data-action="shp-editor">بازگشت به ویرایش</button>
@@ -483,20 +508,20 @@ function previewView() {
     <div class="shop-customer-preview">
       ${groups.length ? groups.map((group) => `<section class="shop-customer-group">
         <header>
-          ${group.destType && validLink(group, false)
+          ${validLink(group)
             ? `<button type="button" class="shop-level1-link" ${previewAttrs(group)}>${groupIconMarkup(group)}${escape(group.title)} <span>←</span></button>`
             : `<h2>${groupIconMarkup(group)}${escape(group.title)}</h2>`}
           ${group.description ? `<p>${escape(group.description)}</p>` : ''}
-          <span>${group.destType && validLink(group, false) ? escape(destinationLabel(group)) : 'عنوان غیرقابل‌کلیک'}</span>
+          <span>${validLink(group) ? escape(destinationLabel(group)) : 'مقصد نامعتبر'}</span>
         </header>
         <div class="shop-customer-columns">
-          ${group.items.filter((item) => !item.hidden && validLink(item, true)).map((item) => `<article>
+          ${group.items.filter((item) => !item.hidden && validLink(item)).map((item) => `<article>
             <button type="button" class="shop-level2-link" ${previewAttrs(item)}>${escape(item.title)}</button>
             <small class="shop-preview-path">${escape(destinationLabel(item))}</small>
-            <div>${item.children.filter((child) => !child.hidden && validLink(child, true)).map((child) => `<button type="button" class="shop-preview-destination" ${previewAttrs(child)}><b>${escape(child.title)}</b><small>${escape(destinationLabel(child))}</small></button>`).join('')}</div>
+            <div>${item.children.filter((child) => !child.hidden && validLink(child)).map((child) => `<button type="button" class="shop-preview-destination" ${previewAttrs(child)}><b>${escape(child.title)}</b><small>${escape(destinationLabel(child))}</small></button>`).join('')}</div>
           </article>`).join('')}
         </div>
-        <p class="hint">مقصد LeafCat به PLP همان دسته با Filter برند و مدل می‌رود. مقصد لندینگ صفحه کمپین منتشرشده را باز می‌کند.</p>
+        <p class="hint">مقصد LeafCat به PLP همان دسته با Filter برند، تگ و نوع می‌رود. مقصد لندینگ صفحه کمپین منتشرشده را باز می‌کند.</p>
       </section>`).join('') : '<div class="empty-panel"><b>Group قابل‌نمایشی وجود ندارد</b><p>حداقل یک Item معتبر سطح دوم اضافه کن.</p></div>'}
     </div>
   </div>`;
@@ -534,22 +559,23 @@ function move(list, itemId, direction) {
 }
 
 function applyDestinationDefaults(target) {
-  if (target.destType === 'leaf') {
-    target.landingId = '';
-    target.nodeId = validLeaf(target.nodeId) ? target.nodeId : fallbackLeaf();
-    if (!validModel(target.nodeId, target.brandId, target.modelId)) target.modelId = '';
-  } else if (target.destType === 'landing') {
+  if (target.destType === 'landing') {
     target.nodeId = '';
     target.brandId = '';
-    target.modelId = '';
+    target.tagId = '';
+    target.typeId = '';
     target.landingId = validLanding(target.landingId) ? target.landingId : fallbackLanding();
-  } else {
-    Object.assign(target, emptyDestination(), { destType: '' });
+    return;
   }
+  target.destType = 'leaf';
+  target.landingId = '';
+  target.nodeId = validLeaf(target.nodeId) ? target.nodeId : fallbackLeaf();
+  if (!validTag(target.tagId)) target.tagId = '';
+  if (!validType(target.typeId)) target.typeId = '';
 }
 
-function createLink(title, required) {
-  const item = { id: id(required ? 'item' : 'group'), title, hidden: false, ...emptyDestination(), destType: required ? 'leaf' : '' };
+function createLink(title, kind) {
+  const item = { id: id(kind === 'group' ? 'group' : 'item'), title, hidden: false, ...emptyDestination() };
   applyDestinationDefaults(item);
   return item;
 }
@@ -561,8 +587,9 @@ function clickNotice(host) {
     return;
   }
   const brand = host.dataset.destinationBrand ? brandName(host.dataset.destinationBrand) : '';
-  const model = host.dataset.destinationModel || '';
-  shopLayoutState.notice = `کلیک ثبت شد؛ مقصد PLP: ${pathLabel(host.dataset.node)}${brand ? ` · برند ${brand}` : ''}${model ? ` · مدل ${model}` : ''}`;
+  const tag = host.dataset.destinationTag ? tagName(host.dataset.destinationTag) : '';
+  const type = host.dataset.destinationType ? typeName(host.dataset.destinationType) : '';
+  shopLayoutState.notice = `کلیک ثبت شد؛ مقصد PLP: ${pathLabel(host.dataset.node)}${brand ? ` · برند ${brand}` : ''}${tag ? ` · تگ ${tag}` : ''}${type ? ` · نوع ${type}` : ''}`;
 }
 
 export function handleShopLayoutClick(action, host, rerender) {
@@ -574,7 +601,7 @@ export function handleShopLayoutClick(action, host, rerender) {
   if (action === 'shp-device') shopLayoutState.device = host.dataset.device;
   if (action === 'shp-preview-destination') clickNotice(host);
   if (action === 'shp-add-group') {
-    shopLayoutState.data.groups.push({ ...createLink('Group جدید', false), description: '', icon: '', items: [] });
+    shopLayoutState.data.groups.push({ ...createLink('Group جدید', 'group'), description: '', icon: '', items: [] });
   }
   if (action === 'shp-delete-group') shopLayoutState.data.groups = shopLayoutState.data.groups.filter((entry) => entry.id !== host.dataset.group);
   if (action === 'shp-toggle-group' && group) group.hidden = !group.hidden;
@@ -584,11 +611,11 @@ export function handleShopLayoutClick(action, host, rerender) {
   }
   if (action === 'shp-group-up' || action === 'shp-group-down') move(shopLayoutState.data.groups, host.dataset.group, action.endsWith('up') ? -1 : 1);
   if (action === 'shp-add-level2' && group) {
-    group.items.push({ ...createLink('Item سطح دوم', true), children: [] });
+    group.items.push({ ...createLink('Item سطح دوم'), children: [] });
   }
   if (action === 'shp-add-level3' && group) {
     const parent = group.items.find((entry) => entry.id === host.dataset.parent);
-    parent?.children.push(createLink('عنوان سطح سوم', true));
+    parent?.children.push(createLink('عنوان سطح سوم'));
   }
   if (action === 'shp-delete-item' && list) list.splice(list.findIndex((entry) => entry.id === item?.id), 1);
   if (action === 'shp-toggle-item' && item) item.hidden = !item.hidden;

@@ -139,7 +139,7 @@ function subhead() {
   if (ui.tab === 'crawler') return crawlerSubhead();
   return {
     inventory: 'قیمت، تخفیف و موجودی آماری و غیرآماری روی هر SKU',
-    'shop-layout': 'ساختار سه‌سطحی: مقصد LeafCat یا لندینگ، همراه Filter برند و مدل',
+    'shop-layout': 'ساختار سه‌سطحی: مقصد LeafCat یا لندینگ، همراه Filter برند، تگ و نوع',
     schema: 'برای هر LeafCat ویژگی بساز و نوع آن را مشخص کن؛ مثلاً حافظه رم از جنس عدد',
     brands: 'ایجاد برند، محدودکردن آن به LeafCat و جلوگیری از غیرفعال‌سازی برند در حال استفاده',
     variants: 'حداکثر دو محور Variant از ویژگی‌های انتخابی همان LeafCat',
