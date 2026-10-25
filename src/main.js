@@ -1,7 +1,7 @@
 import './style.css';
 import { applyProductDeepLink, bindProduct, openProductGaps, productContent, productMeta } from './product.js';
 import { bindSearch, searchContent } from './search.js';
-import { bindSupply, financeContent, supplyContent } from './supply.js';
+import { bindSupply, financeContent, stockContent, supplyContent } from './supply.js';
 import { logChange, productsOnLeaf } from './catalog.js';
 import { countActiveType, countNodes, countType, findNode, getSiblings, persistTree, removeNode, tree } from './tree.js';
 
@@ -38,7 +38,7 @@ const openDecisions = [
 function readLaunchState() {
   const params = new URLSearchParams(window.location.search);
   const asked = params.get('screen');
-  const screen = asked === 'product' || asked === 'search' || asked === 'supply' || asked === 'finance' ? asked : 'category';
+  const screen = asked === 'product' || asked === 'search' || asked === 'supply' || asked === 'stock' || asked === 'finance' ? asked : 'category';
   if (screen === 'product') applyProductDeepLink(params);
   return {
     screen,
@@ -231,6 +231,9 @@ function render() {
   const search = state.screen === 'search';
   const supply = state.screen === 'supply';
   const finance = state.screen === 'finance';
+  const stock = state.screen === 'stock';
+  const flow = supply || stock || finance;
+  const flowCode = stock ? 'PRD-066 / 067' : 'PRD-065';
   const meta = product ? productMeta() : null;
   document.querySelector('#app').innerHTML = `<div class="layout">
     <aside class="sidebar">
@@ -239,17 +242,18 @@ function render() {
         <button class="${state.screen === 'category' ? 'active' : ''}" data-screen="category"><span>${icon('tree')}</span><b>دسته‌بندی</b><em>PRD-001</em></button>
         <button class="${product ? 'active' : ''}" data-screen="product"><span>${icon('box')}</span><b>محصول</b><em>${product ? meta.code : 'Product'}</em></button>
         <button class="${search ? 'active' : ''}" data-screen="search"><span>${icon('search')}</span><b>سرچ</b><em>PRD-004</em></button>
-        <button class="${supply ? 'active' : ''}" data-screen="supply"><span>${icon('box')}</span><b>تامین فروشنده</b><em>PRD-065</em></button>
+        <button class="${supply ? 'active' : ''}" data-screen="supply"><span>${icon('box')}</span><b>تامین</b><em>PRD-065</em></button>
+        <button class="${stock ? 'active' : ''}" data-screen="stock"><span>${icon('tree')}</span><b>قیمت و موجودی</b><em>PRD-066/067</em></button>
         <button class="${finance ? 'active' : ''}" data-screen="finance"><span>${icon('check')}</span><b>تأیید مالی</b><em>PRD-065</em></button>
       </nav>
-      <div class="prd-box"><small>PRD فعال</small><b>${product ? meta.name : finance ? 'صف تأیید مالی' : supply ? 'درخواست تامین' : search ? 'Search & Discovery' : 'ایجاد CAT Tree'}</b><span>${product ? meta.code : finance || supply ? 'PRD-065' : search ? 'PRD-004' : 'نسخه ۰.۲'} · P0</span><div><i></i>Draft</div></div>
+      <div class="prd-box"><small>PRD فعال</small><b>${product ? meta.name : finance ? 'صف تأیید مالی' : supply ? 'درخواست تامین' : stock ? 'قیمت و موجودی' : search ? 'Search & Discovery' : 'ایجاد CAT Tree'}</b><span>${product ? meta.code : flow ? flowCode : search ? 'PRD-004' : 'نسخه ۰.۲'} · P0</span><div><i></i>Draft</div></div>
       <button class="gap-button" data-action="decisions"><span>${product ? meta.gaps : 5}</span><div><b>تصمیم باز</b><small>نیازمند تعیین تکلیف</small></div></button>
       <div class="profile"><span>م‌ف</span><div><b>مهدی فرحزادی</b><small>مالک محصول</small></div></div>
     </aside>
     <main>
-      <header class="topbar"><div><b>Plaza Digital</b><i>/</i><span>${product ? 'Product' : finance ? 'Finance' : supply ? 'Supply' : search ? 'Search' : 'Category'}</span><i>/</i><strong>${product ? meta.code : finance || supply ? 'PRD-065' : search ? 'PRD-004' : 'PRD-001'}</strong></div><button class="avatar">م‌ف</button></header>
+      <header class="topbar"><div><b>Plaza Digital</b><i>/</i><span>${product ? 'Product' : finance ? 'Finance' : supply ? 'Supply' : stock ? 'Price & Stock' : search ? 'Search' : 'Category'}</span><i>/</i><strong>${product ? meta.code : flow ? flowCode : search ? 'PRD-004' : 'PRD-001'}</strong></div><button class="avatar">م‌ف</button></header>
       <div class="content">
-        ${finance ? financeContent() : supply ? supplyContent() : search ? searchContent() : product ? productContent(icon) : `<div class="page-head"><div><span class="eyebrow">CATEGORY · PRD-001</span><h1>ساختار دسته‌بندی</h1><p>ایجاد و مشاهده مسیر معتبر از Vertical تا LeafCat</p></div><button class="primary" data-action="add-root">${icon('plus')} نود جدید</button></div>
+        ${finance ? financeContent() : supply ? supplyContent() : stock ? stockContent() : search ? searchContent() : product ? productContent(icon) : `<div class="page-head"><div><span class="eyebrow">CATEGORY · PRD-001</span><h1>ساختار دسته‌بندی</h1><p>ایجاد و مشاهده مسیر معتبر از Vertical تا LeafCat</p></div><button class="primary" data-action="add-root">${icon('plus')} نود جدید</button></div>
         <div class="stats">
           <div><span>کل نودها</span><b>${countNodes()}</b></div><div><span>Vertical</span><b>${countType('Vertical')}</b></div><div><span>LeafCat فعال</span><b>${countActiveType('LeafCat')}</b></div><div class="gap-stat"><span>تصمیم باز</span><b>۵</b></div>
         </div>
@@ -265,7 +269,7 @@ function render() {
         <section class="scope"><div>${icon('info')}<span><b>ذخیره‌سازی Prototype</b><small>عملیات ایجاد، مشاهده، ویرایش و حذف در localStorage مرورگر ذخیره می‌شود؛ SEO و نمایش سایت در PRDهای بعدی هستند.</small></span></div><button data-action="decisions">مشاهده کمبودهای PRD</button></section>`}
       </div>
     </main>
-    ${product || search || supply || finance ? '' : (state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'deactivate' ? deactivateModal() : state.modal === 'activate' ? activateModal() : state.modal === 'decisions' ? decisionsModal() : '')}
+    ${product || search || flow ? '' : (state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'deactivate' ? deactivateModal() : state.modal === 'activate' ? activateModal() : state.modal === 'decisions' ? decisionsModal() : '')}
     ${!product && state.toast ? `<div class="toast">${icon('check')} ${state.toast}</div>` : ''}
   </div>`;
   bindEvents();
@@ -288,7 +292,7 @@ function syncDemoUrl() {
       url.searchParams.delete('job');
       url.searchParams.delete('view');
     }
-  } else if (state.screen === 'supply' || state.screen === 'finance') {
+  } else if (['supply', 'stock', 'finance'].includes(state.screen)) {
     url.searchParams.set('screen', state.screen);
     url.searchParams.delete('tab');
     url.searchParams.delete('crawler');
@@ -319,7 +323,7 @@ function bindEvents() {
     syncDemoUrl();
     render();
   }));
-  if (state.screen === 'supply' || state.screen === 'finance') {
+  if (['supply', 'stock', 'finance'].includes(state.screen)) {
     bindSupply(render);
     return;
   }
