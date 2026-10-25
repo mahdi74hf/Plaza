@@ -1,13 +1,14 @@
 import { catalog, fa } from './catalog.js';
 import { pathLabel } from './tree.js';
 
-const KEY = 'plaza-supply-flow-v2';
+const KEY = 'plaza-supply-flow-v3';
 const SELLER = 'سارا محمدی · بوتیک ونک';
 const FINANCE = 'رضا کاظمی · مالی';
+const WAREHOUSE = 'انبار · Inbound';
 const COMPANY = 'رایانه پایتخت ویراست';
-const WAREHOUSE = 'انبار مرکزی تهران';
 const suppliers = ['پارس موبایل', 'دیجی‌تامین', 'برفاب تجارت', 'آوای ارتباط', 'نوین سیستم'];
 const THRESHOLD = 30;
+const IN_TRANSIT = ['approved', 'warehouse_changed'];
 
 const history = {
   'PLAZA-IPHONE-BLK-256': { supplier: 'پارس موبایل', avg: 91_200_000, last: 92_000_000, sale: 98_900_000, shadow: 1 },
@@ -37,22 +38,28 @@ function stamp(daysAgo = 0) {
 function seedRequests() {
   return [
     {
-      id: 'SUP-1043', seller: SELLER, supplier: 'آوای ارتباط', settle: addDays(12), delivery: addDays(1), official: true, vat: 10, note: '',
+      id: 'INV-PLZ-01043', seller: SELLER, supplier: 'آوای ارتباط', settle: addDays(12), delivery: addDays(1), official: true, vat: 10, note: '',
       lines: [{ sku: 'PLAZA-GALAXY-BLK-256', qty: 4, buy: 38_400_000 }, { sku: 'PLAZA-REDMI-BLU-128', qty: 6, buy: 12_800_000 }],
       status: 'approved', created: stamp(3),
-      log: [{ at: stamp(3), who: SELLER, text: 'ارسال برای تأیید مالی' }, { at: stamp(2), who: FINANCE, text: 'تأیید شد' }],
+      log: [{ at: stamp(3), who: SELLER, text: 'تأیید پیش‌فاکتور و ارسال برای مالی' }, { at: stamp(2), who: FINANCE, text: 'تأیید شد. سند حسابداری در این فاز زده نشد.' }],
     },
     {
-      id: 'SUP-1044', seller: SELLER, supplier: 'برفاب تجارت', settle: addDays(20), delivery: addDays(4), official: false, vat: 10, note: '',
+      id: 'INV-PLZ-01044', seller: SELLER, supplier: 'برفاب تجارت', settle: addDays(20), delivery: addDays(10), official: false, vat: 10, note: 'تاریخ فاکتور ۱۰ روز بعد است؛ ورود زودتر از انبار مجاز است.',
       lines: [{ sku: 'PLAZA-BARFAB-BF15', qty: 10, buy: 11_300_000 }],
       status: 'pending', created: stamp(1),
-      log: [{ at: stamp(1), who: SELLER, text: 'ارسال برای تأیید مالی' }],
+      log: [{ at: stamp(1), who: SELLER, text: 'تأیید پیش‌فاکتور و ارسال برای مالی' }],
     },
     {
-      id: 'SUP-1045', seller: SELLER, supplier: 'پارس موبایل', settle: addDays(9), delivery: addDays(2), official: true, vat: 10, note: '',
+      id: 'INV-PLZ-01045', seller: SELLER, supplier: 'پارس موبایل', settle: addDays(9), delivery: addDays(2), official: true, vat: 10, note: '',
       lines: [{ sku: 'PLAZA-IPHONE-BLK-256', qty: 3, buy: 92_500_000 }],
       status: 'returned', created: stamp(1),
-      log: [{ at: stamp(1), who: SELLER, text: 'ارسال برای تأیید مالی' }, { at: stamp(0), who: FINANCE, text: 'برگشت برای اصلاح: پیش‌فاکتور با مبلغ ردیف یکی نیست.' }],
+      log: [{ at: stamp(1), who: SELLER, text: 'تأیید پیش‌فاکتور و ارسال برای مالی' }, { at: stamp(0), who: FINANCE, text: 'برگشت از مالی جهت اصلاح: پیش‌فاکتور با مبلغ ردیف یکی نیست.' }],
+    },
+    {
+      id: 'INV-PLZ-01042', seller: SELLER, supplier: 'دیجی‌تامین', settle: addDays(8), delivery: addDays(14), official: false, vat: 10, note: '',
+      lines: [{ sku: 'PLAZA-IPAD-256-11', qty: 2, buy: 34_500_000 }],
+      status: 'draft', created: stamp(4),
+      log: [{ at: stamp(4), who: SELLER, text: 'پیش‌نویس پیش‌فاکتور ذخیره شد' }],
     },
   ];
 }
@@ -137,18 +144,43 @@ function code(value) {
   return `<bdi dir="ltr" class="mono">${escape(value)}</bdi>`;
 }
 
-function skus() {
-  return catalog.products.filter((item) => item.status === 'published').flatMap((item) => (item.skus || []).map((sku) => ({
+function variantOf(sku) {
+  return Object.values(sku.combo || {}).filter(Boolean).join(' · ');
+}
+
+function mapSku(item, sku) {
+  const categoryPath = pathLabel(item.leafId) || item.leafId || '';
+  return {
     code: sku.code,
     productCode: item.model || item.id,
     product: item.title,
-    category: pathLabel(item.leafId).split(' / ').pop() || item.leafId,
-    categoryPath: pathLabel(item.leafId),
+    variant: variantOf(sku),
+    category: categoryPath.split(' / ').pop() || item.leafId || 'بدون دسته',
+    categoryPath,
     listPrice: sku.price,
     compareAt: sku.compareAt,
     warehouse: Number(sku.stock || 0),
     reserved: Number(sku.reserved || 0),
-  })));
+  };
+}
+
+const FALLBACK_SKUS = [
+  { code: 'PLAZA-IPHONE-BLK-256', productCode: 'A3293', product: 'گوشی اپل آیفون ۱۶ پرو', variant: 'مشکی · ۲۵۶ گیگابایت', category: 'گوشی موبایل', categoryPath: 'موبایل و تبلت / گوشی موبایل', listPrice: 98_900_000, compareAt: 109_000_000, warehouse: 6, reserved: 2 },
+  { code: 'PLAZA-IPHONE-SLV-256', productCode: 'A3293', product: 'گوشی اپل آیفون ۱۶ پرو', variant: 'نقره‌ای · ۲۵۶ گیگابایت', category: 'گوشی موبایل', categoryPath: 'موبایل و تبلت / گوشی موبایل', listPrice: 99_400_000, compareAt: 109_000_000, warehouse: 1, reserved: 1 },
+  { code: 'PLAZA-GALAXY-BLK-256', productCode: 'SM-S931', product: 'گوشی سامسونگ گلکسی S25', variant: 'مشکی · ۲۵۶ گیگابایت', category: 'گوشی موبایل', categoryPath: 'موبایل و تبلت / گوشی موبایل', listPrice: 42_500_000, compareAt: 47_000_000, warehouse: 8, reserved: 0 },
+  { code: 'PLAZA-REDMI-BLU-128', productCode: 'Note14', product: 'گوشی شیائومی ردمی نوت ۱۴', variant: 'آبی · ۱۲۸ گیگابایت', category: 'گوشی موبایل', categoryPath: 'موبایل و تبلت / گوشی موبایل', listPrice: 14_900_000, compareAt: null, warehouse: 12, reserved: 0 },
+  { code: 'PLAZA-IPAD-256-11', productCode: 'A2898', product: 'تبلت اپل آیپد ایر', variant: '۲۵۶ گیگابایت · ۱۱ اینچ', category: 'تبلت', categoryPath: 'موبایل و تبلت / تبلت', listPrice: 39_000_000, compareAt: null, warehouse: 3, reserved: 0 },
+  { code: 'PLAZA-VIVO-16-512', productCode: 'X1504', product: 'لپ‌تاپ ایسوس ویووبوک', variant: '۱۶ گیگابایت · ۵۱۲ گیگابایت', category: 'لپ‌تاپ', categoryPath: 'لپ‌تاپ و کامپیوتر / لپ‌تاپ', listPrice: 46_000_000, compareAt: 49_000_000, warehouse: 2, reserved: 0 },
+  { code: 'PLAZA-BARFAB-QH3000', productCode: 'QH-3000', product: 'بخاری برقی برفاب', variant: 'SKU پایه', category: 'بخاری برقی', categoryPath: 'لوازم گرمایشی / بخاری برقی', listPrice: 5_980_000, compareAt: null, warehouse: 9, reserved: 0 },
+  { code: 'PLAZA-BARFAB-BF15', productCode: 'BF-15', product: 'بخاری گازی برفاب', variant: 'SKU پایه', category: 'بخاری گازی', categoryPath: 'لوازم گرمایشی / بخاری گازی', listPrice: 13_400_000, compareAt: null, warehouse: 5, reserved: 0 },
+  { code: 'PLAZA-ENERGY-GH0618', productCode: 'GH-0618', product: 'بخاری گازی انرژی', variant: 'SKU پایه', category: 'بخاری گازی', categoryPath: 'لوازم گرمایشی / بخاری گازی', listPrice: 15_700_000, compareAt: null, warehouse: 4, reserved: 0 },
+];
+
+function skus() {
+  const fromCatalog = (catalog.products || [])
+    .filter((item) => item.status === 'published' && Array.isArray(item.skus) && item.skus.length)
+    .flatMap((item) => item.skus.filter((sku) => sku?.code && sku.active !== false).map((sku) => mapSku(item, sku)));
+  return fromCatalog.length ? fromCatalog : FALLBACK_SKUS;
 }
 function skuByCode(value) {
   return skus().find((item) => item.code === value);
@@ -174,7 +206,7 @@ function received(requestId, sku) {
   return ui.receipts.filter((item) => item.requestId === requestId && item.sku === sku).reduce((sum, item) => sum + item.qty, 0);
 }
 function transitLines(value) {
-  return ui.requests.filter((item) => item.status === 'approved').flatMap((item) => item.lines.filter((line) => line.sku === value).map((line) => ({
+  return ui.requests.filter((item) => IN_TRANSIT.includes(item.status)).flatMap((item) => item.lines.filter((line) => line.sku === value).map((line) => ({
     requestId: item.id,
     supplier: item.supplier,
     delivery: item.delivery,
@@ -183,7 +215,23 @@ function transitLines(value) {
   }))).filter((line) => line.left > 0);
 }
 
-// PRD-066: sellable = approved in-transit due within one day + warehouse − reserved; shadow excluded; negative shows 0.
+function pricedLines(sku) {
+  const from = addDays(-30);
+  return ui.requests
+    .filter((item) => ['approved', 'received', 'warehouse_changed'].includes(item.status))
+    .flatMap((item) => item.lines.filter((line) => line.sku === sku).map((line) => ({ ...line, supplier: item.supplier, at: item.created, saleAt: line.saleAt })))
+    .filter((line) => (line.at || '').slice(0, 10) >= from);
+}
+
+function monthAvg(sku) {
+  const lines = pricedLines(sku);
+  const qty = lines.reduce((sum, line) => sum + (Number(line.qty) || 0), 0);
+  const amount = lines.reduce((sum, line) => sum + (Number(line.qty) || 0) * (Number(line.buy) || 0), 0);
+  if (qty) return Math.round(amount / qty);
+  return ui.avg[sku] ?? history[sku]?.avg ?? null;
+}
+
+// PRD-066: sellable = approved in-transit due within one day + warehouse − reserved; shadow is out of this phase.
 function stockRow(sku) {
   const lines = transitLines(sku.code);
   const transit = lines.reduce((sum, line) => sum + line.left, 0);
@@ -193,17 +241,16 @@ function stockRow(sku) {
   const warehouse = sku.warehouse + arrived;
   const raw = near + warehouse - sku.reserved;
   const past = history[sku.code] || {};
-  const lastLine = ui.requests.filter((item) => item.status === 'approved').flatMap((item) => item.lines.map((line) => ({ ...line, supplier: item.supplier }))).filter((line) => line.sku === sku.code).pop();
+  const lastLine = ui.requests.filter((item) => ['approved', 'received', 'warehouse_changed'].includes(item.status)).flatMap((item) => item.lines.map((line) => ({ ...line, supplier: item.supplier }))).filter((line) => line.sku === sku.code).pop();
   return {
     ...sku,
     transit,
     near,
     warehouse,
-    shadow: past.shadow || 0,
     sellable: Math.max(0, raw),
     oversold: raw < 0,
     supplier: lastLine?.supplier || past.supplier || '',
-    avg: ui.avg[sku.code] ?? past.avg ?? null,
+    avg: monthAvg(sku.code),
     last: lastLine?.buy ?? past.last ?? null,
     saleAtLast: lastLine?.saleAt ?? past.sale ?? null,
     lines,
@@ -221,13 +268,33 @@ function totals(form) {
 }
 
 const STATUS = {
-  draft: ['پیش‌نویس', 'muted'],
+  draft: ['پیش‌نویس (پیش‌فاکتور)', 'muted'],
+  sent: ['تأیید پیش‌فاکتور و ارسال برای مالی', 'info'],
   pending: ['منتظر تأیید مالی', 'warning'],
-  returned: ['برگشت برای اصلاح', 'info'],
-  approved: ['تأییدشده', 'success'],
-  rejected: ['ردشده', 'danger'],
+  returned: ['برگشت از مالی جهت اصلاح', 'info'],
+  approved: ['تأییدشده توسط مالی', 'success'],
+  received: ['ورود به انبار', 'success'],
+  rejected: ['ردشده توسط مالی', 'danger'],
   cancelled: ['لغوشده', 'muted'],
+  warehouse_changed: ['تغییر درخواست توسط انبار', 'warning'],
 };
+
+function canCancel(item) {
+  return ['draft', 'sent', 'pending', 'returned'].includes(item.status);
+}
+
+function tip(id, label, text) {
+  return `<span class="ux-tip" tabindex="0" aria-describedby="${id}">${label} ⓘ<span role="tooltip" id="${id}">${text}</span></span>`;
+}
+
+function depNote() {
+  return `<aside class="ux-deps" aria-label="وابستگی‌های این فاز">
+    <p><b>کالا از قبل ساخته شده:</b> فقط SKU منتشرشده قابل انتخاب است. محصول بدون SKU در این لیست نمی‌آید.</p>
+    <p><b>انبار Inbound:</b> وقتی وضعیت به تأیید مالی برسد، تامین باید به سرویس ورود انبار وصل شود تا انبار ورود را ثبت کند.</p>
+    <p><b>مالی:</b> سند حسابداری در این فاز زده نمی‌شود؛ وابستگی ثبت سند برای فاز بعد است.</p>
+    <p><b>شناسه یکتا:</b> شماره فاکتور با مالی، انبار Inbound و سفارش یکی است.</p>
+  </aside>`;
+}
 function pill(status) {
   const [label, tone] = STATUS[status] || [status, 'muted'];
   return `<span class="pill pill-${tone}">${label}</span>`;
@@ -300,19 +367,31 @@ function supplyPage() {
     filtered ? 'نتیجه‌ای با این فیلترها پیدا نشد.' : 'هنوز درخواست تامینی ثبت نکرده‌اید.',
     filtered ? '<button type="button" class="ux-btn" data-sup-clear>حذف فیلترها</button>' : '<button type="button" class="ux-btn ux-primary" data-sup-new>ثبت اولین درخواست</button>');
   return `<div class="ux-page">
-    ${pageHead('تامین کالا · PRD-065', 'درخواست‌های تامین', `فروشنده: ${SELLER}. موجودی در راه فقط بعد از تأیید مالی ساخته می‌شود.`,
+    ${pageHead('تامین کالا · PRD-065', 'درخواست‌های تامین', `فروشنده: ${SELLER}. هر فاکتور شناسه یکتا دارد و با مالی، انبار Inbound و سفارش یکی است.`,
       `<button type="button" class="ux-btn ux-primary" data-sup-new aria-label="ثبت درخواست تامین جدید"><span aria-hidden="true">+</span> ثبت درخواست تامین</button>`)}
+    ${depNote()}
     <section class="ux-card">
+      <ol class="ux-flow" aria-label="مراحل درخواست تامین">
+        <li>پیش‌نویس (پیش‌فاکتور)</li>
+        <li>تأیید پیش‌فاکتور و ارسال برای مالی</li>
+        <li>منتظر تأیید مالی</li>
+        <li>برگشت از مالی جهت اصلاح</li>
+        <li>تأییدشده توسط مالی</li>
+        <li>ورود به انبار — فاکتور بسته می‌شود</li>
+        <li>ردشده توسط مالی</li>
+        <li>لغوشده — فقط تا قبل از تأیید مالی</li>
+        <li>تغییر درخواست توسط انبار</li>
+      </ol>
       <div class="ux-toolbar">
-        <label class="ux-field ux-grow"><span>جست‌وجو</span><input data-focus="req-q" data-sup-req-q value="${escape(ui.reqQuery)}" placeholder="شماره، تامین‌کننده یا نام کالا" /></label>
+        <label class="ux-field ux-grow"><span>جست‌وجو</span><input data-focus="req-q" data-sup-req-q value="${escape(ui.reqQuery)}" placeholder="شناسه فاکتور، تامین‌کننده یا SKU" /></label>
         <label class="ux-field"><span>وضعیت</span><select data-sup-req-status><option value="">همه</option>${Object.entries(STATUS).map(([key, [label]]) => `<option value="${key}" ${ui.reqStatus === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label>
         <div class="ux-actions"><button type="button" class="ux-btn" data-sup-export="requests">خروجی اکسل درخواست‌ها</button><button type="button" class="ux-btn" data-sup-export="lines">خروجی اکسل ردیف کالا</button></div>
       </div>
       <div class="ux-table-wrap"><table class="ux-table" aria-label="لیست درخواست‌های تامین">
-        <thead><tr><th scope="col">شماره</th><th scope="col">تامین‌کننده</th><th scope="col" class="num">ردیف</th><th scope="col" class="num">مبلغ کل</th><th scope="col">خرید رسمی</th><th scope="col">تاریخ تسویه</th><th scope="col">تاریخ تحویل</th><th scope="col">وضعیت</th><th scope="col">تاریخ ثبت</th><th scope="col"><span class="sr-only">عملیات</span></th></tr></thead>
+        <thead><tr><th scope="col">شناسه فاکتور</th><th scope="col">تامین‌کننده</th><th scope="col" class="num">ردیف SKU</th><th scope="col" class="num">مبلغ کل</th><th scope="col">خرید رسمی</th><th scope="col">تاریخ تسویه</th><th scope="col">تاریخ تحویل فاکتور</th><th scope="col">وضعیت</th><th scope="col">تاریخ ثبت</th><th scope="col"><span class="sr-only">عملیات</span></th></tr></thead>
         <tbody>${body}</tbody>
       </table></div>
-      <p class="ux-caption">${fa(list.length)} درخواست</p>
+      <p class="ux-caption">${fa(list.length)} درخواست · لغو فقط تا قبل از تأیید مالی ممکن است.</p>
     </section>
   </div>`;
 }
@@ -320,7 +399,7 @@ function supplyPage() {
 function requestRow(item) {
   const total = totals(item).total;
   const editable = item.status === 'draft' || item.status === 'returned';
-  const cancellable = ['draft', 'pending', 'returned'].includes(item.status);
+  const inbound = IN_TRANSIT.includes(item.status);
   return `<tr>
     <th scope="row">${code(item.id)}</th>
     <td>${escape(item.supplier)}</td>
@@ -334,7 +413,8 @@ function requestRow(item) {
     <td><div class="ux-row-actions">
       <button type="button" class="ux-btn ux-ghost" data-sup-view="${item.id}">جزئیات</button>
       ${editable ? `<button type="button" class="ux-btn ux-ghost" data-sup-edit="${item.id}">ویرایش</button>` : ''}
-      ${cancellable ? `<button type="button" class="ux-btn ux-ghost ux-danger-text" data-sup-cancel="${item.id}">لغو</button>` : ''}
+      ${canCancel(item) ? `<button type="button" class="ux-btn ux-ghost ux-danger-text" data-sup-cancel="${item.id}">لغو</button>` : ''}
+      ${inbound ? `<button type="button" class="ux-btn ux-ghost" data-sup-inb="${item.id}">ورود انبار</button>` : ''}
       <button type="button" class="ux-btn ux-ghost" data-sup-pdf="${item.id}">سند PDF</button>
     </div></td>
   </tr>`;
@@ -349,7 +429,7 @@ function requestDialog() {
   const sum = totals(form);
   const query = ui.pickQuery.trim();
   const found = skus().filter((item) => (!ui.pickCategory || item.category === ui.pickCategory)
-    && (!query || `${item.product} ${item.code} ${item.productCode}`.toLowerCase().includes(query.toLowerCase())));
+    && (!query || `${item.product} ${item.code} ${item.productCode} ${item.variant || ''}`.toLowerCase().includes(query.toLowerCase())));
   const added = new Set(form.lines.map((line) => line.sku));
   const err = (key) => (form.errors[key] ? `<small class="ux-error" id="err-${key}">${form.errors[key]}</small>` : '');
   const inv = (key) => (form.errors[key] ? `aria-invalid="true" aria-describedby="err-${key}"` : '');
@@ -361,25 +441,25 @@ function requestDialog() {
         <h3>اطلاعات درخواست</h3>
         <div class="ux-grid-2">
           <label class="ux-field"><span>تامین‌کننده</span><select data-sup-f="supplier" ${inv('supplier')}><option value="">انتخاب تامین‌کننده</option>${suppliers.map((item) => `<option ${form.supplier === item ? 'selected' : ''}>${item}</option>`).join('')}</select>${err('supplier') || '<small> </small>'}</label>
-          <label class="ux-field"><span>انبار مقصد</span><input value="${WAREHOUSE}" readonly aria-readonly="true" /><small>تنها انبار فعال؛ پیش‌فرض و قفل است.</small></label>
           <label class="ux-field"><span>تاریخ تسویه با تامین‌کننده</span><input type="date" data-sup-f="settle" value="${form.settle}" ${inv('settle')} />${err('settle') || '<small> </small>'}</label>
-          <label class="ux-field"><span>تاریخ تحویل به انبار</span><input type="date" data-sup-f="delivery" value="${form.delivery}" ${inv('delivery')} />${err('delivery') || '<small>مبنای موجودی در راه است.</small>'}</label>
+          <label class="ux-field"><span>تاریخ تحویل روی فاکتور</span><input type="date" data-sup-f="delivery" value="${form.delivery}" ${inv('delivery')} />${err('delivery') || '<small>ورود زودتر از این تاریخ هم پذیرفته می‌شود.</small>'}</label>
           <label class="ux-field ux-check-field"><span>خرید رسمی</span><div class="ux-switch"><input type="checkbox" role="switch" data-sup-official ${form.official ? 'checked' : ''} /> <span>با ارزش افزوده</span></div><small> </small></label>
           ${form.official ? `<label class="ux-field"><span>نرخ ارزش افزوده ٪</span><input inputmode="numeric" data-sup-f="vat" value="${escape(form.vat)}" ${inv('vat')} />${err('vat') || '<small> </small>'}</label>` : '<label class="ux-field"><span>نرخ ارزش افزوده ٪</span><input value="—" disabled /><small>با روشن شدن خرید رسمی فعال می‌شود.</small></label>'}
         </div>
-        <p class="ux-note">نوع تحویل (ارسال تامین‌کننده یا جمع‌آوری توسط لجستیک) برای فازهای بعدی است.</p>
+        <p class="ux-note">انبار مقصد در این فاز نیست. ورود کالا از سرویس Inbound انبار می‌آید. سند حسابداری مالی هم در این فاز زده نمی‌شود.</p>
 
-        <h3>کالاها</h3>
+        <h3>SKUها</h3>
+        <p class="ux-note">فقط کالایی که از قبل در کاتالوگ ساخته و SKU فعال دارد انتخاب می‌شود. ردیف درخواست همان SKU است، نه خود محصول.</p>
         <div class="ux-grid-2">
-          <label class="ux-field"><span>جست‌وجوی کالا</span><input data-focus="pick-q" data-sup-pick-q value="${escape(ui.pickQuery)}" placeholder="نام کالا، کد کالا یا SKU" /><small> </small></label>
+          <label class="ux-field"><span>جست‌وجوی SKU</span><input data-focus="pick-q" data-sup-pick-q value="${escape(ui.pickQuery)}" placeholder="نام کالا، مشخصه یا کد SKU" /><small> </small></label>
           <label class="ux-field"><span>دسته‌بندی</span><select data-sup-pick-cat><option value="">همه دسته‌ها</option>${categories().map((item) => `<option ${ui.pickCategory === item ? 'selected' : ''}>${escape(item)}</option>`).join('')}</select><small> </small></label>
         </div>
-        <div class="ux-table-wrap ux-pick"><table class="ux-table ux-compact" aria-label="لیست کالاها">
-          <caption class="sr-only">لیست کالاها</caption>
-          <thead><tr><th scope="col">کالا</th><th scope="col">دسته‌بندی</th><th scope="col">SKU</th><th scope="col"><span class="sr-only">افزودن</span></th></tr></thead>
-          <tbody>${found.length ? found.map((item) => `<tr><td>${escape(item.product)}</td><td>${escape(item.category)}</td><td>${code(item.code)}</td><td>${added.has(item.code) ? '<span class="pill pill-success">اضافه شد</span>' : `<button type="button" class="ux-btn ux-ghost" data-sup-add="${item.code}">+ افزودن</button>`}</td></tr>`).join('') : '<tr><td colspan="4"><div class="ux-empty"><b>کالایی با این جست‌وجو پیدا نشد.</b></div></td></tr>'}</tbody>
+        <div class="ux-table-wrap ux-pick"><table class="ux-table ux-compact" aria-label="لیست SKUهای ساخته‌شده">
+          <caption class="sr-only">لیست SKUهای ساخته‌شده</caption>
+          <thead><tr><th scope="col">کالا</th><th scope="col">مشخصه SKU</th><th scope="col">کد SKU</th><th scope="col">دسته‌بندی</th><th scope="col"><span class="sr-only">افزودن</span></th></tr></thead>
+          <tbody>${found.length ? found.map((item) => `<tr><td>${escape(item.product)}</td><td>${escape(item.variant || 'SKU پایه')}</td><td>${code(item.code)}</td><td>${escape(item.category)}</td><td>${added.has(item.code) ? '<span class="pill pill-success">اضافه شد</span>' : `<button type="button" class="ux-btn ux-ghost" data-sup-add="${item.code}">+ افزودن SKU</button>`}</td></tr>`).join('') : '<tr><td colspan="5"><div class="ux-empty"><b>SKU ساخته‌شده‌ای با این جست‌وجو نیست.</b><p>اول محصول و SKU را در کاتالوگ بسازید.</p></div></td></tr>'}</tbody>
         </table></div>
-        <p class="ux-caption">${fa(found.length)} کالا در لیست</p>
+        <p class="ux-caption">${fa(found.length)} SKU در لیست</p>
         ${err('lines')}
         <div class="ux-table-wrap"><table class="ux-table" aria-label="ردیف‌های درخواست">
           <thead><tr><th scope="col">کالا</th><th scope="col">SKU</th><th scope="col" class="num">تعداد</th><th scope="col" class="num">قیمت واحد خرید (تومان)</th><th scope="col" class="num">مبلغ ردیف</th><th scope="col"><span class="sr-only">حذف</span></th></tr></thead>
@@ -401,8 +481,8 @@ function requestDialog() {
         <label class="ux-field"><span>توضیحات (اختیاری)</span><textarea data-sup-f="note" rows="2">${escape(form.note)}</textarea></label>
       </div>
       <footer class="ux-dialog-foot">
-        <button type="button" class="ux-btn ux-primary" data-sup-submit="pending">ارسال برای تأیید مالی</button>
-        <button type="button" class="ux-btn" data-sup-submit="draft">ذخیره پیش‌نویس</button>
+        <button type="button" class="ux-btn ux-primary" data-sup-submit="pending">تأیید پیش‌فاکتور و ارسال برای مالی</button>
+        <button type="button" class="ux-btn" data-sup-submit="draft">ذخیره پیش‌نویس (پیش‌فاکتور)</button>
         <button type="button" class="ux-btn ux-ghost" data-sup-close>انصراف</button>
       </footer>
     </section>
@@ -419,21 +499,49 @@ function detailDrawer() {
       <div class="ux-dialog-body">
         <div>${pill(item.status)}</div>
         <dl class="ux-meta">
+          <div><dt>شناسه یکتا</dt><dd>${code(item.id)}</dd></div>
           <div><dt>فروشنده</dt><dd>${escape(item.seller)}</dd></div>
           <div><dt>تامین‌کننده</dt><dd>${escape(item.supplier)}</dd></div>
           <div><dt>تاریخ تسویه</dt><dd>${jalali(item.settle)}</dd></div>
-          <div><dt>تاریخ تحویل</dt><dd>${jalali(item.delivery)}</dd></div>
-          <div><dt>انبار مقصد</dt><dd>${WAREHOUSE}</dd></div>
+          <div><dt>تاریخ تحویل فاکتور</dt><dd>${jalali(item.delivery)}</dd></div>
+          <div><dt>سینک</dt><dd>مالی · انبار Inbound · سفارش</dd></div>
         </dl>
+        ${IN_TRANSIT.includes(item.status) ? `<p class="ux-note">ورود زودتر از تاریخ فاکتور هم تأیید می‌شود و وضعیت به ورود به انبار می‌رود.</p>
+          <div class="ux-actions"><button type="button" class="ux-btn ux-primary" data-sup-inb="${item.id}">ثبت ورود از Inbound</button></div>` : ''}
+        ${item.status === 'received' ? '<p class="ux-note">فاکتور با ورود به انبار بسته شده است.</p>' : ''}
         <div class="ux-table-wrap"><table class="ux-table ux-compact" aria-label="ردیف‌های درخواست">
-          <thead><tr><th scope="col">کالا</th><th scope="col" class="num">تعداد</th><th scope="col" class="num">قیمت خرید</th><th scope="col" class="num">مبلغ</th></tr></thead>
-          <tbody>${item.lines.map((line) => `<tr><td>${escape(skuByCode(line.sku)?.product || line.sku)}</td><td class="num">${fa(line.qty)}</td><td class="num">${money(line.buy)}</td><td class="num">${money(line.qty * line.buy)}</td></tr>`).join('')}</tbody>
+          <thead><tr><th scope="col">کالا</th><th scope="col">SKU</th><th scope="col" class="num">تعداد</th><th scope="col" class="num">قیمت خرید</th><th scope="col" class="num">مبلغ</th></tr></thead>
+          <tbody>${item.lines.map((line) => `<tr><td>${escape(skuByCode(line.sku)?.product || line.sku)}</td><td>${code(line.sku)}</td><td class="num">${fa(line.qty)}</td><td class="num">${money(line.buy)}</td><td class="num">${money(line.qty * line.buy)}</td></tr>`).join('')}</tbody>
         </table></div>
         <dl class="ux-sum"><div><dt>جمع خالص</dt><dd>${money(sum.net)}</dd></div>${item.official ? `<div><dt>ارزش افزوده</dt><dd>${money(sum.vat)}</dd></div>` : ''}<div class="ux-sum-total"><dt>مبلغ کل</dt><dd>${money(sum.total)}</dd></div></dl>
         <h3>تاریخچه</h3>
         <ol class="ux-timeline">${item.log.map((entry) => `<li><b>${escape(entry.text)}</b><small>${escape(entry.who)} · ${jalali(entry.at)}</small></li>`).join('')}</ol>
       </div>
     </aside>
+  </div>`;
+}
+
+function inboundDialog() {
+  const item = ui.requests.find((row) => row.id === ui.target);
+  if (!item) return '';
+  const early = item.delivery > iso(new Date());
+  return `<div class="ux-backdrop" data-sup-close-bg>
+    <section class="ux-dialog" role="dialog" aria-modal="true" aria-labelledby="inb-title">
+      <header class="ux-dialog-head"><h2 id="inb-title">ورود به انبار · ${code(item.id)}</h2><button type="button" class="ux-icon" data-sup-close aria-label="بستن">×</button></header>
+      <div class="ux-dialog-body">
+        <p>این ثبت از سرویس <b>Inbound انبار</b> می‌آید. تامین فقط وضعیت را می‌گیرد و فاکتور را می‌بندد.</p>
+        <p>تاریخ تحویل فاکتور: <b>${jalali(item.delivery)}</b>${early ? ' — ورود زودتر از تاریخ فاکتور هم تأیید می‌شود و در ظرفیت کالا می‌نشیند.' : ''}</p>
+        <div class="ux-table-wrap"><table class="ux-table ux-compact" aria-label="SKUهای فاکتور">
+          <thead><tr><th scope="col">SKU</th><th scope="col" class="num">تعداد سند</th><th scope="col" class="num">واردشده</th></tr></thead>
+          <tbody>${item.lines.map((line) => `<tr><td>${code(line.sku)}<br><small>${escape(skuByCode(line.sku)?.product || '')}</small></td><td class="num">${fa(line.qty)}</td><td class="num">${fa(received(item.id, line.sku))}</td></tr>`).join('')}</tbody>
+        </table></div>
+      </div>
+      <footer class="ux-dialog-foot">
+        <button type="button" class="ux-btn ux-primary" data-sup-inbound="match">ورود مطابق سند</button>
+        <button type="button" class="ux-btn" data-sup-inbound="diff">ورود با مغایرت</button>
+        <button type="button" class="ux-btn ux-ghost" data-sup-close>انصراف</button>
+      </footer>
+    </section>
   </div>`;
 }
 
@@ -453,7 +561,8 @@ function stockPage() {
   const state = demoState();
   if (state === 'denied') return denied();
   return `<div class="ux-page">
-    ${pageHead('موجودی و قیمت · PRD-066 / PRD-067', 'قیمت و موجودی', 'موجودی قابل فروش از درخواست‌های تأییدشده و انبار حساب می‌شود. لیست قیمت همان عدد را فقط می‌خواند.')}
+    ${pageHead('موجودی و قیمت · PRD-066 / PRD-067', 'قیمت و موجودی', 'موجودی قابل فروش از فاکتور تأییدشده و ورود Inbound حساب می‌شود. موجودی سایه در این فاز نیست.')}
+    ${depNote()}
     <div class="ux-tabs" role="tablist" aria-label="قیمت و موجودی">
       <button type="button" role="tab" aria-selected="${ui.stockTab === 'stock'}" class="${ui.stockTab === 'stock' ? 'active' : ''}" data-sup-stock-tab="stock">وضعیت موجودی</button>
       <button type="button" role="tab" aria-selected="${ui.stockTab === 'price'}" class="${ui.stockTab === 'price' ? 'active' : ''}" data-sup-stock-tab="price">لیست قیمت</button>
@@ -471,20 +580,19 @@ function filteredStock() {
 function stockSection(state) {
   const rows = state === 'empty' ? [] : filteredStock();
   const kind = state === 'loading' || state === 'error' ? state : '';
-  const body = kind ? stateBlock(kind, 12) : rows.length ? rows.map((row) => `<tr>
+  const body = kind ? stateBlock(kind, 11) : rows.length ? rows.map((row) => `<tr>
     <td>${code(row.productCode)}</td>
     <th scope="row"><button type="button" class="ux-link" data-sup-sku="${row.code}">${code(row.code)}</button></th>
     <td>${escape(row.product)}</td>
     <td class="num"><b>${fa(row.sellable)}</b>${row.oversold ? ' <span class="pill pill-danger">فروش بیش از موجودی</span>' : ''}</td>
     <td class="num">${fa(row.transit)}</td>
     <td class="num">${fa(row.warehouse)}</td>
-    <td class="num">${fa(row.shadow)}</td>
     <td class="num">${fa(row.reserved)}</td>
     <td>${row.supplier ? escape(row.supplier) : '—'}</td>
     <td class="num">${row.avg ? money(row.avg) : '—'}</td>
     <td class="num">${row.last ? money(row.last) : '—'}</td>
     <td class="num">${row.saleAtLast ? money(row.saleAtLast) : '—'}</td>
-  </tr>`).join('') : stateBlock('', 12, ui.stockQuery ? 'نتیجه‌ای با این جست‌وجو پیدا نشد.' : 'هنوز SKU فعالی نیست.', ui.stockQuery ? '<button type="button" class="ux-btn" data-sup-stock-clear>حذف جست‌وجو</button>' : '');
+  </tr>`).join('') : stateBlock('', 11, ui.stockQuery ? 'نتیجه‌ای با این جست‌وجو پیدا نشد.' : 'هنوز SKU فعالی نیست.', ui.stockQuery ? '<button type="button" class="ux-btn" data-sup-stock-clear>حذف جست‌وجو</button>' : '');
   return `<section class="ux-card" role="tabpanel">
     <div class="ux-toolbar">
       <label class="ux-field ux-grow"><span>جست‌وجو</span><input data-focus="stock-q" data-sup-stock-q value="${escape(ui.stockQuery)}" placeholder="کد کالا، کد SKU یا نام کالا" /></label>
@@ -492,10 +600,17 @@ function stockSection(state) {
     </div>
     <div class="ux-table-wrap"><table class="ux-table" aria-label="وضعیت موجودی کالا">
       <thead><tr>
-        <th scope="col">کد کالا</th><th scope="col">کد SKU</th><th scope="col">نام کالا</th>
-        <th scope="col" class="num"><span class="ux-tip" tabindex="0" aria-describedby="tip-sellable">موجودی انبار قابل فروش ⓘ<span role="tooltip" id="tip-sellable">در راهِ تأییدشده با تحویل حداکثر تا فردا + موجودی انبار − موجودی رزرو. موجودی سایه حساب نمی‌شود و عدد منفی صفر نمایش داده می‌شود.</span></span></th>
-        <th scope="col" class="num">موجودی در راه</th><th scope="col" class="num">موجودی انبار</th><th scope="col" class="num">موجودی سایه انبار</th><th scope="col" class="num">موجودی رزرو</th>
-        <th scope="col">نام تامین‌کننده کالا</th><th scope="col" class="num">میانگین قیمت خرید</th><th scope="col" class="num">آخرین قیمت خرید</th><th scope="col" class="num">قیمت فروش در آخرین تاریخ خرید</th>
+        <th scope="col">${tip('tip-pcode', 'کد کالا', 'کد مدل یا شناسه محصول والد همین SKU.')}</th>
+        <th scope="col">${tip('tip-sku', 'کد SKU', 'واحد انتخاب و شمارش موجودی. درخواست تامین فقط روی SKU ثبت می‌شود.')}</th>
+        <th scope="col">${tip('tip-name', 'نام کالا', 'عنوان محصول منتشرشده‌ای که این SKU به آن وصل است.')}</th>
+        <th scope="col" class="num">${tip('tip-sellable', 'موجودی انبار قابل فروش', 'در راهِ تأییدشده با تحویل حداکثر تا فردا + موجودی انبار − رزرو. ورود زودتر از تاریخ فاکتور هم در ظرفیت می‌نشیند. عدد منفی صفر دیده می‌شود.')}</th>
+        <th scope="col" class="num">${tip('tip-transit', 'موجودی در راه', 'تعداد باقی‌مانده فاکتورهای تأییدشده یا مغایر انبار که هنوز ورود Inbound نخورده‌اند.')}</th>
+        <th scope="col" class="num">${tip('tip-wh', 'موجودی انبار', 'کالای واردشده از Inbound که هنوز رزرو یا خارج نشده. سایه در این فاز نیست.')}</th>
+        <th scope="col" class="num">${tip('tip-rsv', 'موجودی رزرو', 'فروخته شده و هنوز از انبار خارج نشده.')}</th>
+        <th scope="col">${tip('tip-sup', 'نام تامین‌کننده کالا', 'تامین‌کننده آخرین فاکتور تأییدشده همین SKU.')}</th>
+        <th scope="col" class="num">${tip('tip-avg', 'میانگین قیمت خرید', 'میانگین موزون خرید یک ماه گذشته همین SKU، بدون ارزش افزوده.')}</th>
+        <th scope="col" class="num">${tip('tip-last', 'آخرین قیمت خرید', 'قیمت واحد آخرین فاکتور تأییدشده همین SKU.')}</th>
+        <th scope="col" class="num">${tip('tip-sale', 'قیمت فروش در آخرین تاریخ خرید', 'قیمت سایت در زمان همان تأیید مالی؛ با تغییر بعدی عوض نمی‌شود.')}</th>
       </tr></thead>
       <tbody>${body}</tbody>
     </table></div>
@@ -540,10 +655,17 @@ function priceSection(state) {
     </div>
     <div class="ux-table-wrap"><table class="ux-table" aria-label="لیست قیمت و موجودی">
       <thead><tr>
-        <th scope="col">کد کالا</th><th scope="col">کد SKU</th><th scope="col">نام کالا</th><th scope="col">دسته‌بندی</th>
-        <th scope="col" class="num">قیمت پایه (تومان)</th><th scope="col">نوع تخفیف</th><th scope="col" class="num">تخفیف کالا</th>
-        <th scope="col" class="num"><span class="ux-tip" tabindex="0" aria-describedby="tip-final">قیمت فروش نهایی سایت ⓘ<span role="tooltip" id="tip-final">مبلغی: قیمت پایه − تخفیف. درصدی: قیمت پایه × (۱ − درصد).</span></span></th>
-        <th scope="col" class="num">تعداد قابل فروش</th><th scope="col" class="num">موجودی انبار</th><th scope="col"><span class="sr-only">ذخیره</span></th>
+        <th scope="col">${tip('tip-pc2', 'کد کالا', 'کد مدل محصول والد.')}</th>
+        <th scope="col">${tip('tip-sku2', 'کد SKU', 'کلید ردیف قیمت. فقط SKU ساخته‌شده در این لیست است.')}</th>
+        <th scope="col">${tip('tip-nm2', 'نام کالا', 'عنوان محصول منتشرشده.')}</th>
+        <th scope="col">${tip('tip-cat2', 'دسته‌بندی', 'LeafCat همان SKU.')}</th>
+        <th scope="col" class="num">${tip('tip-base', 'قیمت پایه (تومان)', 'قیمت قبل از تخفیف SKU. قابل ویرایش است.')}</th>
+        <th scope="col">${tip('tip-kind', 'نوع تخفیف', 'مبلغی یا درصدی روی همین SKU. پروموشن سبد اینجا نیست.')}</th>
+        <th scope="col" class="num">${tip('tip-off', 'تخفیف کالا', 'اگر مبلغی باشد تومان کم می‌شود؛ اگر درصدی باشد از قیمت پایه.')}</th>
+        <th scope="col" class="num">${tip('tip-final', 'قیمت فروش نهایی سایت', 'مبلغی: پایه − تخفیف. درصدی: پایه × (۱ − درصد).')}</th>
+        <th scope="col" class="num">${tip('tip-sell2', 'تعداد قابل فروش', 'همان موجودی انبار قابل فروش PRD-066. از این صفحه عوض نمی‌شود.')}</th>
+        <th scope="col" class="num">${tip('tip-wh2', 'موجودی انبار', 'ورود Inbound منهای خروج و رزرو. سایه در این فاز نیست و اینجا ویرایش نمی‌شود.')}</th>
+        <th scope="col"><span class="sr-only">ذخیره</span></th>
       </tr></thead>
       <tbody>${body}</tbody>
     </table></div>
@@ -697,19 +819,20 @@ function readUpload(text, file) {
 function financePage() {
   const state = demoState();
   if (state === 'denied') return denied();
-  const pending = ui.requests.filter((item) => item.status === 'pending').sort((a, b) => a.settle.localeCompare(b.settle));
-  const done = ui.requests.filter((item) => ['approved', 'rejected', 'returned'].includes(item.status));
+  const pending = ui.requests.filter((item) => item.status === 'pending' || item.status === 'sent').sort((a, b) => a.settle.localeCompare(b.settle));
+  const done = ui.requests.filter((item) => ['approved', 'rejected', 'returned', 'received', 'cancelled', 'warehouse_changed'].includes(item.status));
   const list = state === 'empty' ? [] : ui.financeTab === 'pending' ? pending : done;
   const kind = state === 'loading' || state === 'error' ? state : '';
   const body = kind ? stateBlock(kind, 9) : list.length ? list.map((item) => `<tr>
     <th scope="row">${code(item.id)}</th><td>${escape(item.seller)}</td><td>${escape(item.supplier)}</td>
     <td>${item.lines.map((line) => `${escape(skuByCode(line.sku)?.product || line.sku)} × ${fa(line.qty)}`).join('<br>')}</td>
     <td class="num">${money(totals(item).total)}</td><td>${item.official ? 'بله' : 'خیر'}</td><td>${jalali(item.settle)}</td><td>${pill(item.status)}</td>
-    <td><div class="ux-row-actions"><button type="button" class="ux-btn ux-ghost" data-sup-view="${item.id}">جزئیات</button>${item.status === 'pending' ? `<button type="button" class="ux-btn ux-primary" data-sup-fin="approve" data-id="${item.id}">تأیید</button><button type="button" class="ux-btn" data-sup-fin="return" data-id="${item.id}">برگشت برای اصلاح</button><button type="button" class="ux-btn ux-ghost ux-danger-text" data-sup-fin="reject" data-id="${item.id}">رد</button>` : ''}</div></td>
+    <td><div class="ux-row-actions"><button type="button" class="ux-btn ux-ghost" data-sup-view="${item.id}">جزئیات</button>${item.status === 'pending' || item.status === 'sent' ? `<button type="button" class="ux-btn ux-primary" data-sup-fin="approve" data-id="${item.id}">تأیید</button><button type="button" class="ux-btn" data-sup-fin="return" data-id="${item.id}">برگشت برای اصلاح</button><button type="button" class="ux-btn ux-ghost ux-danger-text" data-sup-fin="reject" data-id="${item.id}">رد</button><button type="button" class="ux-btn ux-ghost ux-danger-text" data-sup-fin="cancel" data-id="${item.id}">لغو</button>` : ''}</div></td>
   </tr>`).join('') : stateBlock('', 9, ui.financeTab === 'pending' ? 'درخواستی منتظر تأیید نیست.' : 'هنوز درخواستی بررسی نشده.');
   return `<div class="ux-page">
-    ${pageHead('درخواست‌های مالی · PRD-065', 'درخواست‌های مالی', `کاربر: ${FINANCE}. این صفحه فقط برای نقش مالی است و فروشنده به آن دسترسی ندارد.`,
+    ${pageHead('درخواست‌های مالی · PRD-065', 'درخواست‌های مالی', `کاربر: ${FINANCE}. شناسه فاکتور با تامین و انبار یکی است. سند حسابداری در این فاز زده نمی‌شود.`,
       `<button type="button" class="ux-btn" data-sup-export="finance-pending">خروجی اکسل در صف</button><button type="button" class="ux-btn" data-sup-export="finance-done">خروجی اکسل بررسی‌شده</button>`)}
+    ${depNote()}
     <div class="ux-tabs" role="tablist" aria-label="درخواست‌های مالی">
       <button type="button" role="tab" aria-selected="${ui.financeTab === 'pending'}" class="${ui.financeTab === 'pending' ? 'active' : ''}" data-sup-fin-tab="pending">در صف (${fa(pending.length)})</button>
       <button type="button" role="tab" aria-selected="${ui.financeTab === 'done'}" class="${ui.financeTab === 'done' ? 'active' : ''}" data-sup-fin-tab="done">بررسی‌شده (${fa(done.length)})</button>
@@ -757,9 +880,9 @@ function printRequest(item) {
   </style></head><body><div class="doc">
     <header><h1>${COMPANY}</h1><p>سند درخواست تامین کالا</p><p>فروشنده: <b>${escape(item.seller)}</b></p></header>
     <div class="meta">
-      <div>شماره درخواست: <b dir="ltr">${item.id}</b></div><div>تاریخ ثبت: ${jalali(item.created)}</div>
-      <div>تامین‌کننده: ${escape(item.supplier)}</div><div>انبار مقصد: ${WAREHOUSE}</div>
-      <div>تاریخ تسویه: ${jalali(item.settle)}</div><div>تاریخ تحویل: ${jalali(item.delivery)}</div>
+      <div>شناسه یکتا: <b dir="ltr">${item.id}</b></div><div>تاریخ ثبت: ${jalali(item.created)}</div>
+      <div>تامین‌کننده: ${escape(item.supplier)}</div><div>سینک: مالی · انبار Inbound · سفارش</div>
+      <div>تاریخ تسویه: ${jalali(item.settle)}</div><div>تاریخ تحویل فاکتور: ${jalali(item.delivery)}</div>
       <div>وضعیت: ${STATUS[item.status]?.[0] || item.status}</div><div>خرید رسمی: ${item.official ? 'بله' : 'خیر'}</div>
     </div>
     <table><thead><tr><th>ردیف</th><th>کالا</th><th>SKU</th><th>تعداد</th><th>قیمت واحد (تومان)</th><th>مبلغ (تومان)</th></tr></thead><tbody>${rows}</tbody></table>
@@ -772,7 +895,7 @@ function printRequest(item) {
 /* ---------- Public ---------- */
 
 export function supplyContent() {
-  return `${supplyPage()}${ui.dialog === 'request' ? requestDialog() : ''}${ui.dialog === 'detail' ? detailDrawer() : ''}${ui.dialog === 'cancel' ? confirmDialog(`لغو «${ui.target}»؟`, 'درخواست لغو می‌شود و دیگر به مالی نمی‌رسد. بعد از تأیید مالی، لغو از اینجا ممکن نیست.', 'cancel', 'لغو درخواست') : ''}${toast()}`;
+  return `${supplyPage()}${ui.dialog === 'request' ? requestDialog() : ''}${ui.dialog === 'detail' ? detailDrawer() : ''}${ui.dialog === 'inbound' ? inboundDialog() : ''}${ui.dialog === 'cancel' ? confirmDialog(`لغو «${ui.target}»؟`, 'لغو فقط تا قبل از تأیید مالی ممکن است. بعد از تأیید مالی فاکتور لغو نمی‌شود.', 'cancel', 'لغو درخواست') : ''}${toast()}`;
 }
 
 export function stockContent() {
@@ -780,11 +903,11 @@ export function stockContent() {
 }
 
 export function financeContent() {
-  const reason = { approve: false, reject: 'دلیل رد', return: 'توضیح برای اصلاح' };
-  const titles = { approve: `تأیید «${ui.target}»؟`, reject: `رد «${ui.target}»؟`, return: `برگشت «${ui.target}» برای اصلاح؟` };
-  const texts = { approve: 'با تأیید، تعداد هر ردیف به‌عنوان موجودی در راه همان SKU با تاریخ تحویل این درخواست ثبت می‌شود.', reject: 'درخواست ردشده نهایی است و موجودی در راه نمی‌سازد.', return: 'درخواست برای فروشنده باز می‌شود تا اصلاح و دوباره ارسال کند.' };
-  const labels = { approve: 'تأیید درخواست', reject: 'رد درخواست', return: 'برگشت برای اصلاح' };
-  const dialog = ['approve', 'reject', 'return'].includes(ui.dialog) ? confirmDialog(titles[ui.dialog], texts[ui.dialog], ui.dialog, labels[ui.dialog], reason[ui.dialog]) : '';
+  const reason = { approve: false, reject: 'دلیل رد', return: 'توضیح برای اصلاح', cancel: 'دلیل لغو' };
+  const titles = { approve: `تأیید «${ui.target}»؟`, reject: `رد «${ui.target}»؟`, return: `برگشت «${ui.target}» برای اصلاح؟`, cancel: `لغو «${ui.target}»؟` };
+  const texts = { approve: 'با تأیید، فاکتور به انبار Inbound می‌رود و موجودی در راه همان SKU ساخته می‌شود. سند حسابداری در این فاز زده نمی‌شود.', reject: 'ردشده توسط مالی نهایی است و موجودی در راه نمی‌سازد.', return: 'برگشت از مالی جهت اصلاح؛ فروشنده دوباره پیش‌فاکتور را می‌فرستد.', cancel: 'لغو فقط تا قبل از تأیید مالی ممکن است.' };
+  const labels = { approve: 'تأیید درخواست', reject: 'رد درخواست', return: 'برگشت برای اصلاح', cancel: 'لغو توسط مالی' };
+  const dialog = ['approve', 'reject', 'return', 'cancel'].includes(ui.dialog) ? confirmDialog(titles[ui.dialog], texts[ui.dialog], ui.dialog, labels[ui.dialog], reason[ui.dialog]) : '';
   return `${financePage()}${ui.dialog === 'detail' ? detailDrawer() : ''}${dialog}${toast()}`;
 }
 
@@ -817,16 +940,21 @@ function submit(status) {
   form.errors = validate(form, status);
   if (Object.keys(form.errors).length) return false;
   const lines = form.lines.map((line) => ({ sku: line.sku, qty: num(line.qty), buy: num(line.buy) }));
-  const text = status === 'pending' ? 'ارسال برای تأیید مالی' : 'ذخیره پیش‌نویس';
+  const text = status === 'pending' ? 'تأیید پیش‌فاکتور و ارسال برای مالی' : 'ذخیره پیش‌نویس (پیش‌فاکتور)';
   if (form.id) {
     const item = ui.requests.find((row) => row.id === form.id);
     Object.assign(item, { supplier: form.supplier, settle: form.settle, delivery: form.delivery, official: form.official, vat: num(form.vat) || 0, note: form.note, lines, status });
     item.log.push(nowLog(SELLER, text));
   } else {
     ui.seq += 1;
-    ui.requests.unshift({ id: `SUP-${ui.seq}`, seller: SELLER, supplier: form.supplier, settle: form.settle, delivery: form.delivery, official: form.official, vat: num(form.vat) || 0, note: form.note, lines, status, created: new Date().toISOString(), log: [nowLog(SELLER, text)] });
+    ui.requests.unshift({
+      id: `INV-PLZ-${String(ui.seq).padStart(5, '0')}`,
+      seller: SELLER, supplier: form.supplier, settle: form.settle, delivery: form.delivery, official: form.official, vat: num(form.vat) || 0, note: form.note, lines, status,
+      created: new Date().toISOString(),
+      log: [nowLog(SELLER, text)],
+    });
   }
-  ui.toast = status === 'pending' ? 'درخواست برای تأیید مالی ارسال شد. تا تأیید نشده می‌توانید لغوش کنید.' : 'پیش‌نویس ذخیره شد.';
+  ui.toast = status === 'pending' ? 'پیش‌فاکتور برای مالی ارسال شد. تا قبل از تأیید مالی می‌توانید لغوش کنید.' : 'پیش‌نویس پیش‌فاکتور ذخیره شد.';
   return true;
 }
 
@@ -872,6 +1000,36 @@ export function bindSupply(render) {
     render();
   });
   on('[data-sup-view]', 'click', (el) => { ui.target = el.dataset.supView; ui.dialog = 'detail'; render(); });
+  on('[data-sup-inb]', 'click', (el) => { ui.target = el.dataset.supInb; ui.dialog = 'inbound'; render(); });
+  on('[data-sup-inbound]', 'click', (el) => {
+    const item = ui.requests.find((row) => row.id === ui.target);
+    if (!item || !IN_TRANSIT.includes(item.status)) return;
+    const early = item.delivery > iso(new Date());
+    if (el.dataset.supInbound === 'match') {
+      item.lines.forEach((line) => {
+        const left = line.qty - received(item.id, line.sku);
+        if (left > 0) ui.receipts.push({ requestId: item.id, sku: line.sku, qty: left, at: new Date().toISOString() });
+      });
+      item.status = 'received';
+      item.log.push(nowLog(WAREHOUSE, early
+        ? 'ورود زودتر از تاریخ فاکتور تأیید شد. فاکتور بسته شد و در ظرفیت کالا نشست.'
+        : 'ورود به انبار مطابق سند. فاکتور بسته شد.'));
+      ui.toast = early
+        ? `«${item.id}» زودتر وارد شد، وضعیت ورود به انبار شد و در ظرفیت کالا نشست.`
+        : `«${item.id}» وارد انبار شد و فاکتور بسته شد.`;
+    } else {
+      item.lines.forEach((line) => {
+        const left = line.qty - received(item.id, line.sku);
+        const take = left > 1 ? left - 1 : left;
+        if (take > 0) ui.receipts.push({ requestId: item.id, sku: line.sku, qty: take, at: new Date().toISOString() });
+      });
+      item.status = 'warehouse_changed';
+      item.log.push(nowLog(WAREHOUSE, 'ورود با مغایرت نسبت به سند فروشنده ثبت شد.'));
+      ui.toast = `«${item.id}» با مغایرت وارد شد. وضعیت: تغییر درخواست توسط انبار.`;
+    }
+    ui.dialog = null;
+    commit();
+  });
   on('[data-sup-cancel]', 'click', (el) => { ui.target = el.dataset.supCancel; ui.dialog = 'cancel'; render(); });
   on('[data-sup-pdf]', 'click', (el) => { const item = ui.requests.find((row) => row.id === el.dataset.supPdf); if (item) printRequest(item); if (ui.toast) render(); });
   on('[data-sup-req-q]', 'input', (el) => { ui.reqQuery = el.value; rerender(); });
@@ -910,25 +1068,26 @@ export function bindSupply(render) {
       return;
     }
     if (!item) return;
-    if (action === 'cancel' && ['draft', 'pending', 'returned'].includes(item.status)) {
+    if (action === 'cancel' && canCancel(item)) {
       item.status = 'cancelled';
-      item.log.push(nowLog(SELLER, 'لغو توسط فروشنده'));
+      const reason = reasonField?.value.trim();
+      item.log.push(nowLog(reason ? FINANCE : SELLER, reason ? `لغوشده توسط مالی: ${reason}` : 'لغو توسط فروشنده'));
       ui.toast = `«${item.id}» لغو شد.`;
     }
-    if (action === 'approve' && item.status === 'pending') {
+    if (action === 'approve' && (item.status === 'pending' || item.status === 'sent')) {
       item.status = 'approved';
       item.lines.forEach((line) => { line.saleAt = priceOf(line.sku).final; });
-      item.log.push(nowLog(FINANCE, 'تأیید شد'));
-      ui.toast = `«${item.id}» تأیید شد و موجودی در راه ساخته شد.`;
+      item.log.push(nowLog(FINANCE, 'تأیید شد. فاکتور به انبار Inbound رفت. سند حسابداری در این فاز زده نشد.'));
+      ui.toast = `«${item.id}» تأیید شد، موجودی در راه ساخته شد و به Inbound انبار وصل شد.`;
     }
-    if (action === 'reject' && item.status === 'pending') {
+    if (action === 'reject' && (item.status === 'pending' || item.status === 'sent')) {
       item.status = 'rejected';
-      item.log.push(nowLog(FINANCE, `رد شد: ${reasonField.value.trim()}`));
+      item.log.push(nowLog(FINANCE, `ردشده توسط مالی: ${reasonField.value.trim()}`));
       ui.toast = `«${item.id}» رد شد.`;
     }
-    if (action === 'return' && item.status === 'pending') {
+    if (action === 'return' && (item.status === 'pending' || item.status === 'sent')) {
       item.status = 'returned';
-      item.log.push(nowLog(FINANCE, `برگشت برای اصلاح: ${reasonField.value.trim()}`));
+      item.log.push(nowLog(FINANCE, `برگشت از مالی جهت اصلاح: ${reasonField.value.trim()}`));
       ui.toast = `«${item.id}» برای اصلاح به فروشنده برگشت.`;
     }
     ui.dialog = null;
@@ -950,8 +1109,15 @@ export function bindSupply(render) {
     const before = row.warehouse;
     const avg = row.avg ?? line.buy;
     ui.avg[sku] = Math.round((before * avg + line.buy) / (before + 1));
-    ui.receipts.push({ requestId: line.requestId, sku, qty: 1 });
-    ui.toast = 'یک عدد وارد انبار شد. در راه کم و موجودی انبار زیاد شد.';
+    ui.receipts.push({ requestId: line.requestId, sku, qty: 1, at: new Date().toISOString() });
+    const request = ui.requests.find((item) => item.id === line.requestId);
+    if (request && request.lines.every((entry) => received(request.id, entry.sku) >= entry.qty)) {
+      request.status = 'received';
+      request.log.push(nowLog(WAREHOUSE, request.delivery > iso(new Date())
+        ? 'ورود زودتر از تاریخ فاکتور تأیید شد. فاکتور بسته شد و در ظرفیت کالا نشست.'
+        : 'ورود کامل به انبار. فاکتور بسته شد.'));
+    }
+    ui.toast = 'ورود Inbound ثبت شد. در راه کم شد و در ظرفیت کالا نشست.';
     commit();
   });
 
@@ -1025,16 +1191,16 @@ export function bindSupply(render) {
         ...visibleRequests().map((item) => [item.id, item.supplier, item.seller, item.lines.length, totals(item).total, item.official ? 'بله' : 'خیر', jalali(item.settle), jalali(item.delivery), STATUS[item.status][0], jalali(item.created)])]);
     } else if (type === 'finance-pending' || type === 'finance-done') {
       const rows = type === 'finance-pending'
-        ? ui.requests.filter((item) => item.status === 'pending').sort((a, b) => a.settle.localeCompare(b.settle))
-        : ui.requests.filter((item) => ['approved', 'rejected', 'returned'].includes(item.status));
+        ? ui.requests.filter((item) => item.status === 'pending' || item.status === 'sent').sort((a, b) => a.settle.localeCompare(b.settle))
+        : ui.requests.filter((item) => ['approved', 'rejected', 'returned', 'received', 'cancelled', 'warehouse_changed'].includes(item.status));
       csv(type === 'finance-pending' ? 'finance-queue' : 'finance-reviewed', [['شماره', 'فروشنده', 'تامین‌کننده', 'کالاها', 'مبلغ کل', 'خرید رسمی', 'تاریخ تسویه', 'وضعیت', 'تاریخ ثبت'],
         ...rows.map((item) => [item.id, item.seller, item.supplier, item.lines.map((line) => `${skuByCode(line.sku)?.product || line.sku} × ${line.qty}`).join(' | '), totals(item).total, item.official ? 'بله' : 'خیر', jalali(item.settle), STATUS[item.status][0], jalali(item.created)])]);
     } else if (type === 'lines') {
       csv('supply-request-lines', [['شماره', 'تامین‌کننده', 'کالا', 'SKU', 'تعداد', 'قیمت واحد خرید', 'مبلغ ردیف', 'وضعیت'],
         ...visibleRequests().flatMap((item) => item.lines.map((line) => [item.id, item.supplier, skuByCode(line.sku)?.product || '', line.sku, line.qty, line.buy, line.qty * line.buy, STATUS[item.status][0]]))]);
     } else if (type === 'stock') {
-      csv('stock-status', [['کد کالا', 'کد SKU', 'نام کالا', 'موجودی انبار قابل فروش', 'موجودی در راه', 'موجودی انبار', 'موجودی سایه انبار', 'موجودی رزرو', 'نام تامین‌کننده کالا', 'میانگین قیمت خرید', 'آخرین قیمت خرید', 'قیمت فروش در آخرین تاریخ خرید'],
-        ...filteredStock().map((row) => [row.productCode, row.code, row.product, row.sellable, row.transit, row.warehouse, row.shadow, row.reserved, row.supplier, row.avg ?? '', row.last ?? '', row.saleAtLast ?? ''])]);
+      csv('stock-status', [['کد کالا', 'کد SKU', 'نام کالا', 'موجودی انبار قابل فروش', 'موجودی در راه', 'موجودی انبار', 'موجودی رزرو', 'نام تامین‌کننده کالا', 'میانگین قیمت خرید یک ماه گذشته', 'آخرین قیمت خرید', 'قیمت فروش در آخرین تاریخ خرید'],
+        ...filteredStock().map((row) => [row.productCode, row.code, row.product, row.sellable, row.transit, row.warehouse, row.reserved, row.supplier, row.avg ?? '', row.last ?? '', row.saleAtLast ?? ''])]);
     } else {
       csv('price-list', [['کد کالا', 'کد SKU', 'نام کالا', 'دسته‌بندی', 'قیمت پایه', 'تخفیف کالا', 'قیمت فروش نهایی سایت', 'تعداد قابل فروش', 'موجودی انبار'],
         ...filteredStock().map((row) => [row.productCode, row.code, row.product, row.category, row.price.base, row.price.kind === 'percent' ? `${row.price.discount}%` : row.price.discount, row.price.final, row.sellable, row.warehouse])]);
