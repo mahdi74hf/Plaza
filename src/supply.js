@@ -37,23 +37,36 @@ function stamp(daysAgo = 0) {
 function seedRequests() {
   return [
     {
-      id: 'SUP-1043', seller: SELLER, supplier: 'آوای ارتباط', settle: addDays(12), delivery: addDays(1), deliveryType: 'supplier', address: '', official: true, vat: 10, note: '',
+      id: 'SUP-1043', seller: SELLER, supplier: 'آوای ارتباط', settle: addDays(12), delivery: addDays(1), official: true, vat: 10, note: '',
       lines: [{ sku: 'PLAZA-GALAXY-BLK-256', qty: 4, buy: 38_400_000 }, { sku: 'PLAZA-REDMI-BLU-128', qty: 6, buy: 12_800_000 }],
       status: 'approved', created: stamp(3),
       log: [{ at: stamp(3), who: SELLER, text: 'ارسال برای تأیید مالی' }, { at: stamp(2), who: FINANCE, text: 'تأیید شد' }],
     },
     {
-      id: 'SUP-1044', seller: SELLER, supplier: 'برفاب تجارت', settle: addDays(20), delivery: addDays(4), deliveryType: 'pickup', address: 'تهران، جاده مخصوص، کیلومتر ۹', official: false, vat: 10, note: '',
+      id: 'SUP-1044', seller: SELLER, supplier: 'برفاب تجارت', settle: addDays(20), delivery: addDays(4), official: false, vat: 10, note: '',
       lines: [{ sku: 'PLAZA-BARFAB-BF15', qty: 10, buy: 11_300_000 }],
       status: 'pending', created: stamp(1),
       log: [{ at: stamp(1), who: SELLER, text: 'ارسال برای تأیید مالی' }],
     },
     {
-      id: 'SUP-1045', seller: SELLER, supplier: 'پارس موبایل', settle: addDays(9), delivery: addDays(2), deliveryType: 'supplier', address: '', official: true, vat: 10, note: '',
+      id: 'SUP-1045', seller: SELLER, supplier: 'پارس موبایل', settle: addDays(9), delivery: addDays(2), official: true, vat: 10, note: '',
       lines: [{ sku: 'PLAZA-IPHONE-BLK-256', qty: 3, buy: 92_500_000 }],
       status: 'returned', created: stamp(1),
       log: [{ at: stamp(1), who: SELLER, text: 'ارسال برای تأیید مالی' }, { at: stamp(0), who: FINANCE, text: 'برگشت برای اصلاح: پیش‌فاکتور با مبلغ ردیف یکی نیست.' }],
     },
+  ];
+}
+
+function seedPriceLogs() {
+  return [
+    { at: stamp(4), who: SELLER, sku: 'PLAZA-GALAXY-BLK-256', product: 'گوشی سامسونگ گلکسی S25', oldFinal: 44_000_000, newFinal: 42_500_000, oldBase: 47_000_000, newBase: 47_000_000, oldDiscount: 3_000_000, newDiscount: 4_500_000, kind: 'amount' },
+    { at: stamp(1), who: SELLER, sku: 'PLAZA-VIVO-16-512', product: 'لپ‌تاپ ایسوس ویووبوک', oldFinal: 47_000_000, newFinal: 46_000_000, oldBase: 49_000_000, newBase: 49_000_000, oldDiscount: 2_000_000, newDiscount: 3_000_000, kind: 'amount' },
+  ];
+}
+function seedUploads() {
+  return [
+    { at: stamp(6), who: SELLER, file: 'price-1405-07-28.csv', applied: 8, errors: 1, warnings: 1, same: 1, total: 11 },
+    { at: stamp(2), who: SELLER, file: 'price-1405-08-02.csv', applied: 3, errors: 0, warnings: 0, same: 7, total: 10 },
   ];
 }
 
@@ -66,10 +79,12 @@ const ui = {
   requests: saved.requests || seedRequests(),
   receipts: saved.receipts || [],
   prices: saved.prices || {},
-  uploads: saved.uploads || [],
+  uploads: saved.uploads?.length ? saved.uploads : seedUploads(),
+  priceLogs: saved.priceLogs?.length ? saved.priceLogs : seedPriceLogs(),
   avg: saved.avg || {},
   seq: saved.seq || 1045,
   stockTab: 'stock',
+  logTab: 'single',
   financeTab: 'pending',
   reqQuery: '',
   reqStatus: '',
@@ -88,7 +103,7 @@ let focusKey = '';
 let focusPos = 0;
 
 function persist() {
-  localStorage.setItem(KEY, JSON.stringify({ requests: ui.requests, receipts: ui.receipts, prices: ui.prices, uploads: ui.uploads, avg: ui.avg, seq: ui.seq }));
+  localStorage.setItem(KEY, JSON.stringify({ requests: ui.requests, receipts: ui.receipts, prices: ui.prices, uploads: ui.uploads, priceLogs: ui.priceLogs, avg: ui.avg, seq: ui.seq }));
 }
 
 function demoState() {
@@ -112,6 +127,11 @@ function jalali(value) {
   if (!value) return '—';
   const date = value.length === 10 ? new Date(`${value}T12:00:00`) : new Date(value);
   return new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric', month: 'long', year: 'numeric' }).format(date);
+}
+function jalaliTime(value) {
+  if (!value) return '—';
+  const date = typeof value === 'number' ? new Date(value) : new Date(value);
+  return new Intl.DateTimeFormat('fa-IR-u-ca-persian', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
 }
 function code(value) {
   return `<bdi dir="ltr" class="mono">${escape(value)}</bdi>`;
@@ -276,7 +296,7 @@ function supplyPage() {
   const list = state === 'empty' ? [] : visibleRequests();
   const kind = state === 'loading' || state === 'error' ? state : '';
   const filtered = ui.reqQuery || ui.reqStatus;
-  const body = kind ? stateBlock(kind, 11) : list.length ? list.map(requestRow).join('') : stateBlock('', 11,
+  const body = kind ? stateBlock(kind, 10) : list.length ? list.map(requestRow).join('') : stateBlock('', 10,
     filtered ? 'نتیجه‌ای با این فیلترها پیدا نشد.' : 'هنوز درخواست تامینی ثبت نکرده‌اید.',
     filtered ? '<button type="button" class="ux-btn" data-sup-clear>حذف فیلترها</button>' : '<button type="button" class="ux-btn ux-primary" data-sup-new>ثبت اولین درخواست</button>');
   return `<div class="ux-page">
@@ -289,7 +309,7 @@ function supplyPage() {
         <div class="ux-actions"><button type="button" class="ux-btn" data-sup-export="requests">خروجی اکسل درخواست‌ها</button><button type="button" class="ux-btn" data-sup-export="lines">خروجی اکسل ردیف کالا</button></div>
       </div>
       <div class="ux-table-wrap"><table class="ux-table" aria-label="لیست درخواست‌های تامین">
-        <thead><tr><th scope="col">شماره</th><th scope="col">تامین‌کننده</th><th scope="col" class="num">ردیف</th><th scope="col" class="num">مبلغ کل</th><th scope="col">خرید رسمی</th><th scope="col">تاریخ تسویه</th><th scope="col">تاریخ تحویل</th><th scope="col">نوع تحویل</th><th scope="col">وضعیت</th><th scope="col">تاریخ ثبت</th><th scope="col"><span class="sr-only">عملیات</span></th></tr></thead>
+        <thead><tr><th scope="col">شماره</th><th scope="col">تامین‌کننده</th><th scope="col" class="num">ردیف</th><th scope="col" class="num">مبلغ کل</th><th scope="col">خرید رسمی</th><th scope="col">تاریخ تسویه</th><th scope="col">تاریخ تحویل</th><th scope="col">وضعیت</th><th scope="col">تاریخ ثبت</th><th scope="col"><span class="sr-only">عملیات</span></th></tr></thead>
         <tbody>${body}</tbody>
       </table></div>
       <p class="ux-caption">${fa(list.length)} درخواست</p>
@@ -309,7 +329,6 @@ function requestRow(item) {
     <td>${item.official ? 'بله' : 'خیر'}</td>
     <td>${jalali(item.settle)}</td>
     <td>${jalali(item.delivery)}</td>
-    <td>${item.deliveryType === 'pickup' ? 'جمع‌آوری توسط لجستیک' : 'ارسال توسط تامین‌کننده'}</td>
     <td>${pill(item.status)}</td>
     <td>${jalali(item.created)}</td>
     <td><div class="ux-row-actions">
@@ -322,7 +341,7 @@ function requestRow(item) {
 }
 
 function blankForm() {
-  return { id: '', supplier: '', settle: addDays(14), delivery: addDays(1), deliveryType: 'supplier', address: '', official: false, vat: '10', note: '', lines: [], errors: {} };
+  return { id: '', supplier: '', settle: addDays(14), delivery: addDays(1), official: false, vat: '10', note: '', lines: [], errors: {} };
 }
 
 function requestDialog() {
@@ -341,30 +360,26 @@ function requestDialog() {
         ${Object.keys(form.errors).length ? '<p class="ux-alert" role="alert">چند فیلد نیاز به اصلاح دارد. موارد قرمز را ببینید.</p>' : ''}
         <h3>اطلاعات درخواست</h3>
         <div class="ux-grid-2">
-          <label class="ux-field"><span>تامین‌کننده</span><select data-sup-f="supplier" ${inv('supplier')}><option value="">انتخاب تامین‌کننده</option>${suppliers.map((item) => `<option ${form.supplier === item ? 'selected' : ''}>${item}</option>`).join('')}</select>${err('supplier')}</label>
+          <label class="ux-field"><span>تامین‌کننده</span><select data-sup-f="supplier" ${inv('supplier')}><option value="">انتخاب تامین‌کننده</option>${suppliers.map((item) => `<option ${form.supplier === item ? 'selected' : ''}>${item}</option>`).join('')}</select>${err('supplier') || '<small> </small>'}</label>
           <label class="ux-field"><span>انبار مقصد</span><input value="${WAREHOUSE}" readonly aria-readonly="true" /><small>تنها انبار فعال؛ پیش‌فرض و قفل است.</small></label>
-          <label class="ux-field"><span>تاریخ تسویه با تامین‌کننده</span><input type="date" data-sup-f="settle" value="${form.settle}" ${inv('settle')} />${err('settle')}</label>
-          <label class="ux-field"><span>تاریخ تحویل به انبار</span><input type="date" data-sup-f="delivery" value="${form.delivery}" ${inv('delivery')} /><small>مبنای موجودی در راه است.</small>${err('delivery')}</label>
+          <label class="ux-field"><span>تاریخ تسویه با تامین‌کننده</span><input type="date" data-sup-f="settle" value="${form.settle}" ${inv('settle')} />${err('settle') || '<small> </small>'}</label>
+          <label class="ux-field"><span>تاریخ تحویل به انبار</span><input type="date" data-sup-f="delivery" value="${form.delivery}" ${inv('delivery')} />${err('delivery') || '<small>مبنای موجودی در راه است.</small>'}</label>
+          <label class="ux-field ux-check-field"><span>خرید رسمی</span><div class="ux-switch"><input type="checkbox" role="switch" data-sup-official ${form.official ? 'checked' : ''} /> <span>با ارزش افزوده</span></div><small> </small></label>
+          ${form.official ? `<label class="ux-field"><span>نرخ ارزش افزوده ٪</span><input inputmode="numeric" data-sup-f="vat" value="${escape(form.vat)}" ${inv('vat')} />${err('vat') || '<small> </small>'}</label>` : '<label class="ux-field"><span>نرخ ارزش افزوده ٪</span><input value="—" disabled /><small>با روشن شدن خرید رسمی فعال می‌شود.</small></label>'}
         </div>
-        <fieldset class="ux-segment"><legend>نوع تحویل</legend>
-          <label><input type="radio" name="dtype" value="supplier" data-sup-f="deliveryType" ${form.deliveryType === 'supplier' ? 'checked' : ''} /> ارسال توسط تامین‌کننده</label>
-          <label><input type="radio" name="dtype" value="pickup" data-sup-f="deliveryType" ${form.deliveryType === 'pickup' ? 'checked' : ''} /> جمع‌آوری توسط لجستیک Plaza</label>
-        </fieldset>
-        ${form.deliveryType === 'pickup' ? `<label class="ux-field"><span>آدرس جمع‌آوری</span><input data-sup-f="address" value="${escape(form.address)}" ${inv('address')} />${err('address')}</label>` : ''}
-        <div class="ux-grid-2">
-          <label class="ux-switch"><input type="checkbox" role="switch" data-sup-official ${form.official ? 'checked' : ''} /> <span>خرید رسمی (با ارزش افزوده)</span></label>
-          ${form.official ? `<label class="ux-field"><span>نرخ ارزش افزوده ٪</span><input inputmode="numeric" data-sup-f="vat" value="${escape(form.vat)}" ${inv('vat')} />${err('vat')}</label>` : '<span></span>'}
-        </div>
+        <p class="ux-note">نوع تحویل (ارسال تامین‌کننده یا جمع‌آوری توسط لجستیک) برای فازهای بعدی است.</p>
 
         <h3>کالاها</h3>
         <div class="ux-grid-2">
-          <label class="ux-field"><span>جست‌وجوی کالا</span><input data-focus="pick-q" data-sup-pick-q value="${escape(ui.pickQuery)}" placeholder="نام کالا، کد کالا یا SKU" /></label>
-          <label class="ux-field"><span>دسته‌بندی</span><select data-sup-pick-cat><option value="">همه دسته‌ها</option>${categories().map((item) => `<option ${ui.pickCategory === item ? 'selected' : ''}>${escape(item)}</option>`).join('')}</select></label>
+          <label class="ux-field"><span>جست‌وجوی کالا</span><input data-focus="pick-q" data-sup-pick-q value="${escape(ui.pickQuery)}" placeholder="نام کالا، کد کالا یا SKU" /><small> </small></label>
+          <label class="ux-field"><span>دسته‌بندی</span><select data-sup-pick-cat><option value="">همه دسته‌ها</option>${categories().map((item) => `<option ${ui.pickCategory === item ? 'selected' : ''}>${escape(item)}</option>`).join('')}</select><small> </small></label>
         </div>
-        <div class="ux-table-wrap ux-pick"><table class="ux-table ux-compact" aria-label="نتیجه جست‌وجوی کالا">
+        <div class="ux-table-wrap ux-pick"><table class="ux-table ux-compact" aria-label="لیست کالاها">
+          <caption class="sr-only">لیست کالاها</caption>
           <thead><tr><th scope="col">کالا</th><th scope="col">دسته‌بندی</th><th scope="col">SKU</th><th scope="col"><span class="sr-only">افزودن</span></th></tr></thead>
           <tbody>${found.length ? found.map((item) => `<tr><td>${escape(item.product)}</td><td>${escape(item.category)}</td><td>${code(item.code)}</td><td>${added.has(item.code) ? '<span class="pill pill-success">اضافه شد</span>' : `<button type="button" class="ux-btn ux-ghost" data-sup-add="${item.code}">+ افزودن</button>`}</td></tr>`).join('') : '<tr><td colspan="4"><div class="ux-empty"><b>کالایی با این جست‌وجو پیدا نشد.</b></div></td></tr>'}</tbody>
         </table></div>
+        <p class="ux-caption">${fa(found.length)} کالا در لیست</p>
         ${err('lines')}
         <div class="ux-table-wrap"><table class="ux-table" aria-label="ردیف‌های درخواست">
           <thead><tr><th scope="col">کالا</th><th scope="col">SKU</th><th scope="col" class="num">تعداد</th><th scope="col" class="num">قیمت واحد خرید (تومان)</th><th scope="col" class="num">مبلغ ردیف</th><th scope="col"><span class="sr-only">حذف</span></th></tr></thead>
@@ -408,7 +423,6 @@ function detailDrawer() {
           <div><dt>تامین‌کننده</dt><dd>${escape(item.supplier)}</dd></div>
           <div><dt>تاریخ تسویه</dt><dd>${jalali(item.settle)}</dd></div>
           <div><dt>تاریخ تحویل</dt><dd>${jalali(item.delivery)}</dd></div>
-          <div><dt>نوع تحویل</dt><dd>${item.deliveryType === 'pickup' ? `جمع‌آوری · ${escape(item.address)}` : 'ارسال توسط تامین‌کننده'}</dd></div>
           <div><dt>انبار مقصد</dt><dd>${WAREHOUSE}</dd></div>
         </dl>
         <div class="ux-table-wrap"><table class="ux-table ux-compact" aria-label="ردیف‌های درخواست">
@@ -443,8 +457,9 @@ function stockPage() {
     <div class="ux-tabs" role="tablist" aria-label="قیمت و موجودی">
       <button type="button" role="tab" aria-selected="${ui.stockTab === 'stock'}" class="${ui.stockTab === 'stock' ? 'active' : ''}" data-sup-stock-tab="stock">وضعیت موجودی</button>
       <button type="button" role="tab" aria-selected="${ui.stockTab === 'price'}" class="${ui.stockTab === 'price' ? 'active' : ''}" data-sup-stock-tab="price">لیست قیمت</button>
+      <button type="button" role="tab" aria-selected="${ui.stockTab === 'log'}" class="${ui.stockTab === 'log' ? 'active' : ''}" data-sup-stock-tab="log">گزارش تغییرات قیمت</button>
     </div>
-    ${ui.stockTab === 'price' ? priceSection(state) : stockSection(state)}
+    ${ui.stockTab === 'price' ? priceSection(state) : ui.stockTab === 'log' ? priceLogSection() : stockSection(state)}
   </div>`;
 }
 
@@ -532,8 +547,46 @@ function priceSection(state) {
       </tr></thead>
       <tbody>${body}</tbody>
     </table></div>
-    <p class="ux-caption">قیمت پایه و تخفیف همین‌جا تکی ویرایش می‌شود. تعداد قابل فروش و موجودی انبار از وضعیت موجودی می‌آید و قابل ویرایش نیست.</p>
-    ${ui.uploads.length ? `<h3>تاریخچه آپلود</h3><div class="ux-table-wrap"><table class="ux-table ux-compact" aria-label="تاریخچه آپلود"><thead><tr><th scope="col">زمان</th><th scope="col">کاربر</th><th scope="col">فایل</th><th scope="col" class="num">اعمال‌شده</th><th scope="col" class="num">خطادار</th></tr></thead><tbody>${ui.uploads.map((item) => `<tr><td>${jalali(item.at)}</td><td>${escape(item.who)}</td><td>${code(item.file)}</td><td class="num">${fa(item.applied)}</td><td class="num">${fa(item.errors)}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    <p class="ux-caption">قیمت پایه و تخفیف همین‌جا تکی ویرایش می‌شود. تعداد قابل فروش و موجودی انبار از وضعیت موجودی می‌آید و قابل ویرایش نیست. لاگ تکی و گزارش اکسل در تب «گزارش تغییرات قیمت» است.</p>
+  </section>`;
+}
+
+function lastOf(list) {
+  return [...list].sort((a, b) => new Date(b.at) - new Date(a.at))[0];
+}
+
+function priceLogSection() {
+  const lastSingle = lastOf(ui.priceLogs);
+  const lastExcel = lastOf(ui.uploads);
+  const logs = ui.logTab === 'excel' ? ui.uploads : ui.priceLogs;
+  const empty = ui.logTab === 'excel' ? 'هنوز اکسلی بارگذاری نشده.' : 'هنوز تغییر تکی ثبت نشده.';
+  const body = logs.length
+    ? (ui.logTab === 'excel' ? ui.uploads.map((item) => `<tr>
+        <td>${jalaliTime(item.at)}</td><td>${escape(item.who)}</td><td>${code(item.file)}</td>
+        <td class="num">${fa(item.total ?? item.applied + item.errors)}</td>
+        <td class="num">${fa(item.applied)}</td><td class="num">${fa(item.same || 0)}</td>
+        <td class="num">${fa(item.warnings || 0)}</td><td class="num">${fa(item.errors)}</td>
+      </tr>`).join('') : ui.priceLogs.map((item) => `<tr>
+        <td>${jalaliTime(item.at)}</td><td>${escape(item.who)}</td><td>${escape(item.product)}</td><td>${code(item.sku)}</td>
+        <td class="num">${money(item.oldFinal)}</td><td class="num">${money(item.newFinal)}</td>
+        <td>${item.kind === 'percent' ? 'درصدی' : 'مبلغی'}</td>
+      </tr>`).join(''))
+    : stateBlock('', ui.logTab === 'excel' ? 8 : 7, empty);
+  return `<section class="ux-card" role="tabpanel">
+    <div class="ux-stats">
+      <div><span>آخرین تغییر تکی</span><b>${lastSingle ? escape(lastSingle.who) : '—'}</b><small>${lastSingle ? jalaliTime(lastSingle.at) : 'هنوز تغییری نیست'}</small></div>
+      <div><span>آخرین بارگذاری اکسل</span><b>${lastExcel ? escape(lastExcel.who) : '—'}</b><small>${lastExcel ? `${jalaliTime(lastExcel.at)} · ${escape(lastExcel.file)}` : 'هنوز فایلی نیست'}</small></div>
+    </div>
+    <div class="ux-tabs" role="tablist" aria-label="نوع گزارش قیمت">
+      <button type="button" role="tab" aria-selected="${ui.logTab === 'single'}" class="${ui.logTab === 'single' ? 'active' : ''}" data-sup-log-tab="single">لاگ موارد تکی</button>
+      <button type="button" role="tab" aria-selected="${ui.logTab === 'excel'}" class="${ui.logTab === 'excel' ? 'active' : ''}" data-sup-log-tab="excel">گزارش نتیجه اکسل</button>
+    </div>
+    <div class="ux-table-wrap"><table class="ux-table" aria-label="${ui.logTab === 'excel' ? 'گزارش اکسل بارگذاری‌شده' : 'لاگ تغییرات تکی قیمت'}">
+      <thead>${ui.logTab === 'excel'
+    ? '<tr><th scope="col">زمان</th><th scope="col">کاربر</th><th scope="col">فایل</th><th scope="col" class="num">کل ردیف</th><th scope="col" class="num">اعمال‌شده</th><th scope="col" class="num">بدون تغییر</th><th scope="col" class="num">هشدار</th><th scope="col" class="num">خطا</th></tr>'
+    : '<tr><th scope="col">زمان</th><th scope="col">کاربر</th><th scope="col">کالا</th><th scope="col">SKU</th><th scope="col" class="num">قیمت قبلی</th><th scope="col" class="num">قیمت جدید</th><th scope="col">نوع تخفیف</th></tr>'}</thead>
+      <tbody>${body}</tbody>
+    </table></div>
   </section>`;
 }
 
@@ -655,10 +708,11 @@ function financePage() {
     <td><div class="ux-row-actions"><button type="button" class="ux-btn ux-ghost" data-sup-view="${item.id}">جزئیات</button>${item.status === 'pending' ? `<button type="button" class="ux-btn ux-primary" data-sup-fin="approve" data-id="${item.id}">تأیید</button><button type="button" class="ux-btn" data-sup-fin="return" data-id="${item.id}">برگشت برای اصلاح</button><button type="button" class="ux-btn ux-ghost ux-danger-text" data-sup-fin="reject" data-id="${item.id}">رد</button>` : ''}</div></td>
   </tr>`).join('') : stateBlock('', 9, ui.financeTab === 'pending' ? 'درخواستی منتظر تأیید نیست.' : 'هنوز درخواستی بررسی نشده.');
   return `<div class="ux-page">
-    ${pageHead('تأیید مالی · PRD-065', 'صف تأیید مالی', `کاربر: ${FINANCE}. این صفحه فقط برای نقش مالی است و فروشنده به آن دسترسی ندارد.`)}
-    <div class="ux-tabs" role="tablist" aria-label="صف مالی">
-      <button type="button" role="tab" aria-selected="${ui.financeTab === 'pending'}" class="${ui.financeTab === 'pending' ? 'active' : ''}" data-sup-fin-tab="pending">منتظر تأیید (${fa(pending.length)})</button>
-      <button type="button" role="tab" aria-selected="${ui.financeTab === 'done'}" class="${ui.financeTab === 'done' ? 'active' : ''}" data-sup-fin-tab="done">بررسی‌شده</button>
+    ${pageHead('درخواست‌های مالی · PRD-065', 'درخواست‌های مالی', `کاربر: ${FINANCE}. این صفحه فقط برای نقش مالی است و فروشنده به آن دسترسی ندارد.`,
+      `<button type="button" class="ux-btn" data-sup-export="finance-pending">خروجی اکسل در صف</button><button type="button" class="ux-btn" data-sup-export="finance-done">خروجی اکسل بررسی‌شده</button>`)}
+    <div class="ux-tabs" role="tablist" aria-label="درخواست‌های مالی">
+      <button type="button" role="tab" aria-selected="${ui.financeTab === 'pending'}" class="${ui.financeTab === 'pending' ? 'active' : ''}" data-sup-fin-tab="pending">در صف (${fa(pending.length)})</button>
+      <button type="button" role="tab" aria-selected="${ui.financeTab === 'done'}" class="${ui.financeTab === 'done' ? 'active' : ''}" data-sup-fin-tab="done">بررسی‌شده (${fa(done.length)})</button>
     </div>
     <section class="ux-card" role="tabpanel">
       <div class="ux-table-wrap"><table class="ux-table" aria-label="درخواست‌های مالی">
@@ -745,7 +799,6 @@ function validate(form, status) {
     if (!form.settle) errors.settle = 'تاریخ تسویه را وارد کنید.';
     if (!form.delivery) errors.delivery = 'تاریخ تحویل را وارد کنید.';
     else if (form.delivery < iso(new Date())) errors.delivery = 'تاریخ تحویل نمی‌تواند قبل از امروز باشد.';
-    if (form.deliveryType === 'pickup' && !form.address.trim()) errors.address = 'برای جمع‌آوری، آدرس لازم است.';
     if (form.official && !(num(form.vat) >= 0 && num(form.vat) <= 100)) errors.vat = 'نرخ ارزش افزوده باید بین ۰ تا ۱۰۰ باشد.';
     if (!form.lines.length) errors.lines = 'حداقل یک کالا اضافه کنید.';
     form.lines.forEach((line, index) => {
@@ -767,11 +820,11 @@ function submit(status) {
   const text = status === 'pending' ? 'ارسال برای تأیید مالی' : 'ذخیره پیش‌نویس';
   if (form.id) {
     const item = ui.requests.find((row) => row.id === form.id);
-    Object.assign(item, { supplier: form.supplier, settle: form.settle, delivery: form.delivery, deliveryType: form.deliveryType, address: form.address, official: form.official, vat: num(form.vat) || 0, note: form.note, lines, status });
+    Object.assign(item, { supplier: form.supplier, settle: form.settle, delivery: form.delivery, official: form.official, vat: num(form.vat) || 0, note: form.note, lines, status });
     item.log.push(nowLog(SELLER, text));
   } else {
     ui.seq += 1;
-    ui.requests.unshift({ id: `SUP-${ui.seq}`, seller: SELLER, supplier: form.supplier, settle: form.settle, delivery: form.delivery, deliveryType: form.deliveryType, address: form.address, official: form.official, vat: num(form.vat) || 0, note: form.note, lines, status, created: new Date().toISOString(), log: [nowLog(SELLER, text)] });
+    ui.requests.unshift({ id: `SUP-${ui.seq}`, seller: SELLER, supplier: form.supplier, settle: form.settle, delivery: form.delivery, official: form.official, vat: num(form.vat) || 0, note: form.note, lines, status, created: new Date().toISOString(), log: [nowLog(SELLER, text)] });
   }
   ui.toast = status === 'pending' ? 'درخواست برای تأیید مالی ارسال شد. تا تأیید نشده می‌توانید لغوش کنید.' : 'پیش‌نویس ذخیره شد.';
   return true;
@@ -828,7 +881,7 @@ export function bindSupply(render) {
   on('[data-sup-f]', 'input', (el) => { ui.form[el.dataset.supF] = el.value; });
   on('[data-sup-f]', 'change', (el) => {
     ui.form[el.dataset.supF] = el.value;
-    if (el.dataset.supF === 'deliveryType' || el.dataset.supF === 'vat') rerender();
+    if (el.dataset.supF === 'vat') rerender();
   });
   on('[data-sup-official]', 'change', (el) => { ui.form.official = el.checked; rerender(); });
   on('[data-sup-pick-q]', 'input', (el) => { ui.pickQuery = el.value; rerender(); });
@@ -885,6 +938,7 @@ export function bindSupply(render) {
   on('[data-sup-fin-tab]', 'click', (el) => { ui.financeTab = el.dataset.supFinTab; render(); });
 
   on('[data-sup-stock-tab]', 'click', (el) => { ui.stockTab = el.dataset.supStockTab; render(); });
+  on('[data-sup-log-tab]', 'click', (el) => { ui.logTab = el.dataset.supLogTab; render(); });
   on('[data-sup-stock-q]', 'input', (el) => { ui.stockQuery = el.value; rerender(); });
   on('[data-sup-stock-clear]', 'click', () => { ui.stockQuery = ''; render(); });
   on('[data-sup-sku]', 'click', (el) => { ui.target = el.dataset.supSku; ui.dialog = 'sku'; render(); });
@@ -919,8 +973,12 @@ export function bindSupply(render) {
   on('[data-sup-price-save]', 'click', (el) => {
     const edit = ui.edits[el.dataset.supPriceSave];
     if (!edit || priceError(num(edit.base), num(edit.discount), edit.kind)) return;
-    ui.prices[el.dataset.supPriceSave] = { base: num(edit.base), discount: num(edit.discount), kind: edit.kind, at: Date.now(), source: 'تکی' };
-    delete ui.edits[el.dataset.supPriceSave];
+    const sku = el.dataset.supPriceSave;
+    const old = priceOf(sku);
+    const next = { base: num(edit.base), discount: num(edit.discount), kind: edit.kind, final: finalPrice(num(edit.base), num(edit.discount), edit.kind) };
+    ui.prices[sku] = { ...next, at: Date.now(), source: 'تکی' };
+    ui.priceLogs.unshift({ at: new Date().toISOString(), who: SELLER, sku, product: skuByCode(sku)?.product || sku, oldFinal: old.final, newFinal: next.final, oldBase: old.base, newBase: next.base, oldDiscount: old.discount, newDiscount: next.discount, kind: next.kind });
+    delete ui.edits[sku];
     ui.toast = 'قیمت ذخیره شد. موجودی تغییری نکرد.';
     commit();
   });
@@ -953,7 +1011,9 @@ export function bindSupply(render) {
       }
     });
     const skipped = ui.upload.rows.filter((row) => row.state === 'error' || (row.state === 'warning' && !ui.upload.acceptWarnings)).length;
-    ui.uploads.unshift({ at: new Date().toISOString(), who: SELLER, file: ui.upload.file, applied, errors: skipped });
+    const warnings = ui.upload.rows.filter((row) => row.state === 'warning').length;
+    const same = ui.upload.rows.filter((row) => row.state === 'same').length;
+    ui.uploads.unshift({ at: new Date().toISOString(), who: SELLER, file: ui.upload.file, applied, errors: skipped, warnings, same, total: ui.upload.rows.length });
     ui.upload = { step: 4, applied, skipped };
     commit();
   });
@@ -961,8 +1021,14 @@ export function bindSupply(render) {
   on('[data-sup-export]', 'click', (el) => {
     const type = el.dataset.supExport;
     if (type === 'requests') {
-      csv('supply-requests', [['شماره', 'تامین‌کننده', 'بوتیک', 'تعداد ردیف', 'مبلغ کل', 'خرید رسمی', 'تاریخ تسویه', 'تاریخ تحویل', 'نوع تحویل', 'وضعیت', 'تاریخ ثبت'],
-        ...visibleRequests().map((item) => [item.id, item.supplier, item.seller, item.lines.length, totals(item).total, item.official ? 'بله' : 'خیر', jalali(item.settle), jalali(item.delivery), item.deliveryType === 'pickup' ? 'جمع‌آوری' : 'ارسال تامین‌کننده', STATUS[item.status][0], jalali(item.created)])]);
+      csv('supply-requests', [['شماره', 'تامین‌کننده', 'بوتیک', 'تعداد ردیف', 'مبلغ کل', 'خرید رسمی', 'تاریخ تسویه', 'تاریخ تحویل', 'وضعیت', 'تاریخ ثبت'],
+        ...visibleRequests().map((item) => [item.id, item.supplier, item.seller, item.lines.length, totals(item).total, item.official ? 'بله' : 'خیر', jalali(item.settle), jalali(item.delivery), STATUS[item.status][0], jalali(item.created)])]);
+    } else if (type === 'finance-pending' || type === 'finance-done') {
+      const rows = type === 'finance-pending'
+        ? ui.requests.filter((item) => item.status === 'pending').sort((a, b) => a.settle.localeCompare(b.settle))
+        : ui.requests.filter((item) => ['approved', 'rejected', 'returned'].includes(item.status));
+      csv(type === 'finance-pending' ? 'finance-queue' : 'finance-reviewed', [['شماره', 'فروشنده', 'تامین‌کننده', 'کالاها', 'مبلغ کل', 'خرید رسمی', 'تاریخ تسویه', 'وضعیت', 'تاریخ ثبت'],
+        ...rows.map((item) => [item.id, item.seller, item.supplier, item.lines.map((line) => `${skuByCode(line.sku)?.product || line.sku} × ${line.qty}`).join(' | '), totals(item).total, item.official ? 'بله' : 'خیر', jalali(item.settle), STATUS[item.status][0], jalali(item.created)])]);
     } else if (type === 'lines') {
       csv('supply-request-lines', [['شماره', 'تامین‌کننده', 'کالا', 'SKU', 'تعداد', 'قیمت واحد خرید', 'مبلغ ردیف', 'وضعیت'],
         ...visibleRequests().flatMap((item) => item.lines.map((line) => [item.id, item.supplier, skuByCode(line.sku)?.product || '', line.sku, line.qty, line.buy, line.qty * line.buy, STATUS[item.status][0]]))]);

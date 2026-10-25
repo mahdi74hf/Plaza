@@ -244,9 +244,9 @@ function render() {
         <button class="${search ? 'active' : ''}" data-screen="search"><span>${icon('search')}</span><b>سرچ</b><em>PRD-004</em></button>
         <button class="${supply ? 'active' : ''}" data-screen="supply"><span>${icon('box')}</span><b>تامین</b><em>PRD-065</em></button>
         <button class="${stock ? 'active' : ''}" data-screen="stock"><span>${icon('tree')}</span><b>قیمت و موجودی</b><em>PRD-066/067</em></button>
-        <button class="${finance ? 'active' : ''}" data-screen="finance"><span>${icon('check')}</span><b>تأیید مالی</b><em>PRD-065</em></button>
+        <button class="${finance ? 'active' : ''}" data-screen="finance"><span>${icon('check')}</span><b>درخواست‌های مالی</b><em>PRD-065</em></button>
       </nav>
-      <div class="prd-box"><small>PRD فعال</small><b>${product ? meta.name : finance ? 'صف تأیید مالی' : supply ? 'درخواست تامین' : stock ? 'قیمت و موجودی' : search ? 'Search & Discovery' : 'ایجاد CAT Tree'}</b><span>${product ? meta.code : flow ? flowCode : search ? 'PRD-004' : 'نسخه ۰.۲'} · P0</span><div><i></i>Draft</div></div>
+      <div class="prd-box"><small>PRD فعال</small><b>${product ? meta.name : finance ? 'درخواست‌های مالی' : supply ? 'درخواست تامین' : stock ? 'قیمت و موجودی' : search ? 'Search & Discovery' : 'ایجاد CAT Tree'}</b><span>${product ? meta.code : flow ? flowCode : search ? 'PRD-004' : 'نسخه ۰.۲'} · P0</span><div><i></i>Draft</div></div>
       <button class="gap-button" data-action="decisions"><span>${product ? meta.gaps : 5}</span><div><b>تصمیم باز</b><small>نیازمند تعیین تکلیف</small></div></button>
       <div class="profile"><span>م‌ف</span><div><b>مهدی فرحزادی</b><small>مالک محصول</small></div></div>
     </aside>
