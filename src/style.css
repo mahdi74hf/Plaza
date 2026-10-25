@@ -1935,6 +1935,12 @@ svg {
   color: var(--ds-danger-text);
   font-size: var(--ds-text-xs);
 }
+.ux-warn {
+  display: block;
+  color: var(--ds-warning-text, #8a5a00);
+  font-size: var(--ds-text-xs);
+  font-weight: 500;
+}
 .ux-btn {
   border: 1px solid var(--ds-border);
   border-radius: var(--ds-radius-md);
