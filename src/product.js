@@ -69,6 +69,16 @@ import {
   seoUi,
 } from './seo.js';
 import { findNode, pathLabel, walk } from './tree.js';
+import {
+  bulkHeading,
+  bulkState,
+  bulkSubhead,
+  bulkView,
+  closeBulkWizard,
+  handleBulkChange,
+  handleBulkClick,
+  openBulkWizard,
+} from './bulk.js';
 
 const ui = {
   tab: 'products',
@@ -99,6 +109,9 @@ const decisions = [
 
 export function productMeta() {
   const current = tabs.find(([id]) => id === ui.tab);
+  if (ui.tab === 'products' && bulkState.open) {
+    return { code: 'PRD-070', name: 'ورود گروهی', tab: 'products', crumb: 'Product', gaps: 0, bulk: true };
+  }
   return {
     code: current?.[2] || 'PRD-032',
     name: current?.[1] || 'محصول',
@@ -111,6 +124,10 @@ export function productMeta() {
 export function applyProductDeepLink(params) {
   const tab = params.get('tab');
   if (tab && tabs.some(([id]) => id === tab)) ui.tab = tab;
+  if (params.get('bulk') === '1' || params.get('bulk') === 'wizard') {
+    ui.tab = 'products';
+    openBulkWizard();
+  }
   if (ui.tab !== 'crawler') return;
   const crawler = params.get('crawler');
   if (crawler === 'wizard') openCrawlerDemoView('wizard');
@@ -139,7 +156,7 @@ export function productContent(icon) {
       ${headAction(icon)}
     </div>
     <div class="prd-tabs">${tabs.map(([id, label, code]) => `<button type="button" data-tab="${id}" class="${ui.tab === id ? 'active' : ''}">${label}<small>${code}</small></button>`).join('')}</div>
-    ${ui.tab === 'inventory' ? inventoryView() : ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : ui.tab === 'redirects' ? redirectsView() : productsView()}
+    ${ui.tab === 'inventory' ? inventoryView() : ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : ui.tab === 'redirects' ? redirectsView() : bulkState.open ? bulkView() : productsView()}
     <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>ویژگی LeafCat، برند، واریانت و محصول در localStorage همین مرورگر می‌مانند.</small></span></div></section>
     ${modalHtml()}
     ${ui.toast ? `<div class="toast">${icon('check')} ${escape(ui.toast)}</div>` : ''}
@@ -148,11 +165,13 @@ export function productContent(icon) {
 
 function heading() {
   if (ui.tab === 'crawler') return crawlerHeading();
+  if (ui.tab === 'products' && bulkState.open) return bulkHeading();
   return { inventory: 'مدیریت قیمت و موجودی', 'shop-layout': 'چیدمان منعطف دسته‌بندی‌های Shop', schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ', redirects: 'Redirect و وضعیت HTTP' }[ui.tab] || 'محصولات کاتالوگ';
 }
 
 function subhead() {
   if (ui.tab === 'crawler') return crawlerSubhead();
+  if (ui.tab === 'products' && bulkState.open) return bulkSubhead();
   return {
     inventory: 'قیمت، تخفیف و موجودی آماری و غیرآماری روی هر SKU',
     'shop-layout': 'ساختار سه‌سطحی: مقصد LeafCat یا لندینگ، همراه Filter برند، تگ و نوع',
@@ -168,7 +187,7 @@ function headAction(icon) {
   if (ui.tab === 'crawler' && crawlerUi.view === 'list') return `<button class="primary" data-action="crawler-new">${icon('plus')} Job جدید</button>`;
   if (ui.tab === 'schema') return `<button class="primary" data-action="new-attribute">${icon('plus')} ویژگی جدید</button>`;
   if (ui.tab === 'brands') return `<button class="primary" data-action="new-brand">${icon('plus')} برند جدید</button>`;
-  if (ui.tab === 'products') return `<button class="primary" data-action="new-product">${icon('plus')} محصول جدید</button>`;
+  if (ui.tab === 'products' && !bulkState.open) return `<div class="head-actions"><button class="secondary" data-action="bulk-open">ورود گروهی</button><button class="primary" data-action="new-product">${icon('plus')} محصول جدید</button></div>`;
   return '';
 }
 
@@ -267,9 +286,11 @@ function productDetail(item) {
       <div class="detail-actions"><button class="action-button" data-action="edit-product">ویرایش</button><button class="action-button" data-action="seo-product">SEO</button></div>
     </div>
     <div class="path-box"><span>LeafCat</span><div><b class="current">${escape(pathLabel(item.leafId) || 'انتخاب نشده')}</b></div></div>
+    ${mediaStrip(item)}
     <div class="detail-grid">
+      <div><span>کد محصول</span><b>${escape(item.code || item.id)}</b></div>
       <div><span>برند</span><b>${escape(brand?.name || 'ندارد')}</b></div>
-      <div><span>تصویر اصلی</span><b>${item.image ? 'دارد' : 'ندارد'}</b></div>
+      <div><span>منبع</span><b>${item.source === 'excel' ? 'اکسل گروهی' : 'فرم تکی'}</b></div>
       <div><span>SKU</span><b>${fa(item.skus.length)}</b></div>
       <div><span>Tagها</span><b>${item.tags?.length ? item.tags.map((id) => catalog.marketingTags.find((tag) => tag.id === id)?.label || id).join('، ') : '—'}</b></div>
       <div><span>Canonical</span><b dir="ltr">${escape(canonicalUrl(item))}</b></div>
@@ -487,6 +508,24 @@ function attributeModal() {
   </section></div>`;
 }
 
+function mediaThumb(src, label) {
+  if (src && (src.startsWith('data:') || src.startsWith('http') || src.startsWith('blob:'))) {
+    return `<figure><img src="${src}" alt="${escape(label || '')}"/><figcaption>${escape(label || '')}</figcaption></figure>`;
+  }
+  return `<figure class="empty"><span>${escape(label || src || 'بدون تصویر')}</span></figure>`;
+}
+
+function mediaStrip(item) {
+  const colors = Object.entries(item.colorImages || {});
+  const gallery = item.gallery || [];
+  if (!item.image && !gallery.length && !colors.length) return '';
+  return `<div class="bulk-photos">
+    ${mediaThumb(item.image, 'اصلی')}
+    ${gallery.map((pic, index) => mediaThumb(pic.src || pic, `گالری ${fa(index + 1)}`)).join('')}
+    ${colors.map(([color, pic]) => mediaThumb(pic.src || pic, color)).join('')}
+  </div>`;
+}
+
 function productModal() {
   const item = ui.editingId ? productById(ui.editingId) : null;
   const leafId = item?.leafId || activeLeaves()[0]?.node.id || '';
@@ -673,6 +712,7 @@ function onClick(event, rerender) {
   if (tab) {
     ui.tab = tab.dataset.tab;
     ui.modal = null;
+    if (ui.tab !== 'products') closeBulkWizard();
     window.__plazaSyncUrl?.();
     rerender();
     return;
@@ -698,6 +738,14 @@ function onClick(event, rerender) {
       seoUi.toast = false;
       toast('ردیف Redirect ذخیره شد', rerender);
     }
+    return;
+  }
+  const bulkResult = handleBulkClick(action, rerender);
+  if (bulkResult) {
+    window.__plazaSyncUrl?.();
+    if (typeof bulkResult === 'string') return toast(bulkResult, rerender);
+    if (bulkResult.productId) ui.productId = bulkResult.productId;
+    if (bulkResult.toast) toast(bulkResult.toast, rerender);
     return;
   }
   if (action === 'close') { ui.modal = null; rerender(); return; }
@@ -809,6 +857,16 @@ function onChange(event, rerender) {
   if (handleInventoryChange(target, rerender)) return;
   if (handleShopLayoutChange(target, rerender)) return;
   if (handleSeoChange(target, rerender)) return;
+  if (target.id === 'bulk-leaf' || target.id === 'bulk-csv' || target.id === 'bulk-images') {
+    Promise.resolve(handleBulkChange(target, rerender)).then(() => {
+      if (bulkState.toast) {
+        const text = bulkState.toast;
+        bulkState.toast = '';
+        toast(text, rerender);
+      }
+    });
+    return;
+  }
   if (target.dataset.field === 'customer') { ui.customerId = target.value; rerender(); return; }
   if (target.id === 'attr-leaf' || target.id === 'attr-type') return;
   if (target.id === 'product-leaf') {

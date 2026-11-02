@@ -313,6 +313,8 @@ function syncDemoUrl() {
     const meta = productMeta();
     url.searchParams.set('screen', 'product');
     url.searchParams.set('tab', meta.tab);
+    if (meta.bulk) url.searchParams.set('bulk', '1');
+    else url.searchParams.delete('bulk');
     if (meta.tab !== 'crawler') {
       url.searchParams.delete('crawler');
       url.searchParams.delete('job');
@@ -324,18 +326,21 @@ function syncDemoUrl() {
     url.searchParams.delete('crawler');
     url.searchParams.delete('job');
     url.searchParams.delete('view');
+    url.searchParams.delete('bulk');
   } else if (state.screen === 'search') {
     url.searchParams.set('screen', 'search');
     url.searchParams.delete('tab');
     url.searchParams.delete('crawler');
     url.searchParams.delete('job');
     url.searchParams.delete('view');
+    url.searchParams.delete('bulk');
   } else {
     url.searchParams.delete('screen');
     url.searchParams.delete('tab');
     url.searchParams.delete('crawler');
     url.searchParams.delete('job');
     url.searchParams.delete('view');
+    url.searchParams.delete('bulk');
   }
   window.history.replaceState({}, '', url);
 }

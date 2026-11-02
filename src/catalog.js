@@ -193,6 +193,9 @@ function readCatalog() {
     data.products?.forEach((item) => {
       if (!item.tags) item.tags = [];
       if (!item.aiCrossSell) item.aiCrossSell = [];
+      if (!item.code) item.code = item.model || item.id;
+      if (!Array.isArray(item.gallery)) item.gallery = [];
+      if (!item.colorImages || typeof item.colorImages !== 'object') item.colorImages = {};
       ensureProductSeo(item);
     });
     if (!Array.isArray(data.redirects)) data.redirects = seedRedirects();

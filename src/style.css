@@ -323,7 +323,9 @@ svg {
   align-items: end;
   justify-content: space-between;
   margin-bottom: 20px;
+  gap: 12px;
 }
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .eyebrow {
   font-size: 9px;
   letter-spacing: 1.8px;
@@ -1179,7 +1181,27 @@ svg {
 .wizard-steps { display: flex; gap: 8px; flex-wrap: wrap; }
 .wizard-steps span { border: 1px solid var(--line); border-radius: 999px; padding: 6px 10px; font-size: 9px; color: var(--muted); background: #fff; }
 .wizard-steps span.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.choice-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .choice-card { border: 1px solid var(--line); border-radius: 12px; background: #fff; padding: 16px; text-align: right; box-shadow: var(--shadow); }
+.bulk-photos { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.bulk-photos figure {
+  margin: 0;
+  width: 88px;
+  background: var(--ds-page);
+  border: 1px solid var(--ds-border);
+  border-radius: 10px;
+  overflow: hidden;
+  text-align: center;
+}
+.bulk-photos img { display: block; width: 88px; height: 88px; object-fit: cover; }
+.bulk-photos figcaption, .bulk-photos span { display: block; padding: 4px 6px; font-size: 9px; color: var(--muted); }
+.bulk-photos figure.empty { min-height: 88px; display: grid; place-items: center; }
+.bulk-preview { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.bulk-preview small, .bulk-preview p { display: block; color: var(--muted); font-size: 10px; margin: 4px 0 0; }
+.excel-table input { width: 100%; min-width: 88px; border: 0; background: transparent; font: inherit; font-size: 11px; }
+@media (max-width: 900px) {
+  .choice-grid, .bulk-preview { grid-template-columns: 1fr; }
+}
 .choice-card.active { border-color: var(--primary); background: var(--primary-soft); }
 .choice-card b { display: block; font-size: 12px; margin-bottom: 4px; }
 .choice-card small { color: var(--muted); font-size: 9px; }
