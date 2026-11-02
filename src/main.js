@@ -2,7 +2,7 @@ import './style.css';
 import { applyProductDeepLink, bindProduct, openProductGaps, productContent, productMeta } from './product.js';
 import { bindSearch, searchContent } from './search.js';
 import { bindSupply, financeContent, stockContent, supplyContent } from './supply.js';
-import { CANONICAL_HOST, catalog, categoryCanonicalUrl, categoryPath, logChange, persistCatalog, productsOnLeaf } from './catalog.js';
+import { CANONICAL_HOST, catalog, categoryCanonicalUrl, categoryPath, logChange, persistCatalog, productsOnLeaf, slugFromTitle, uniqueCategorySlug } from './catalog.js';
 import { addSlugRedirect, canonicalField, followField } from './seo.js';
 import { countActiveType, countNodes, countType, ensureNodeSeo, findNode, getSiblings, persistTree, removeNode, tree, walk } from './tree.js';
 
@@ -101,7 +101,7 @@ function detailPanel() {
     <div class="detail-head">
       <div><span class="type-pill ${node.type.toLowerCase()}">${node.type}</span><span class="active-pill ${effectiveActive ? '' : 'inactive'}"><i></i>${statusLabel}</span><h2>${escapeHtml(node.name)}</h2><p>شناسه: ${node.id}</p></div>
       <div class="detail-actions">
-        <button class="action-button" data-action="seo-cat">SEO</button>
+        ${node.type !== 'Vertical' ? '<button class="action-button" data-action="seo-cat">SEO</button>' : ''}
         <button class="action-button" data-action="edit">ویرایش</button>
         ${node.status === 'inactive'
           ? `<button class="action-button success" data-action="activate" ${parentBlocked ? 'title="ابتدا Parent را فعال کن"' : ''}>فعال‌سازی</button>`
@@ -116,8 +116,10 @@ function detailPanel() {
       <div><span>وضعیت ذخیره‌شده</span><b>${node.status === 'inactive' ? 'غیرفعال' : 'فعال'}</b></div>
       <div><span>وضعیت مؤثر</span><b>${effectiveActive ? 'فعال' : 'غیرفعال'}</b></div>
       <div><span>Child مجاز</span><b>${allowed.length ? allowed.join(' / ') : 'ندارد'}</b></div>
-      <div><span>Canonical</span><b dir="ltr">${escapeHtml(categoryCanonicalUrl(node))}</b></div>
-      <div><span>Follow</span><b>${node.seo?.follow === false ? 'nofollow' : 'follow'}</b></div>
+      ${node.type === 'Vertical'
+        ? '<div><span>صفحه سایت</span><b>ندارد — فقط گروه‌بندی و Breadcrumb</b></div>'
+        : `<div><span>Canonical</span><b dir="ltr">${escapeHtml(categoryCanonicalUrl(node))}</b></div>
+      <div><span>Follow</span><b>${node.seo?.follow === false ? 'nofollow' : 'follow'}</b></div>`}
     </div>
     ${parentBlocked ? `<div class="delete-warning blocked"><b>Parent غیرفعال است</b><p>${node.status === 'active' ? 'این نود با وجود وضعیت ذخیره‌شده «فعال»، تا فعال‌شدن مسیر بالادست غیرفعال مؤثر باقی می‌ماند.' : 'برای فعال‌سازی این نود، ابتدا مسیر بالادست را فعال کن.'}</p></div>` : ''}
     ${node.type === 'LeafCat' && effectiveActive ? `<div class="leaf-note">${icon('check')}<div><b>این نود برای اتصال Product معتبر است</b><p>فقط LeafCat فعال با تمام Parentهای فعال می‌تواند Category نهایی Product باشد.</p></div></div>` : ''}
@@ -223,7 +225,7 @@ function activateModal() {
 
 function categorySeoModal() {
   const found = findNode(state.selected);
-  if (!found) return '';
+  if (!found || found.node.type === 'Vertical') return '';
   const node = found.node;
   ensureNodeSeo(node);
   const defaultUrl = `${CANONICAL_HOST}${categoryPath(node)}`;
@@ -234,7 +236,7 @@ function categorySeoModal() {
       ${canonicalField(defaultUrl, node.seo.canonical).replace('id="seo-canonical"', 'id="cat-seo-canonical"')}
       ${followField(node.seo.follow !== false).replace('id="seo-follow"', 'id="cat-seo-follow"')}
       <label class="check-line"><input id="cat-seo-index" type="checkbox" ${node.seo.index ? 'checked' : ''}/>قابل ایندکس</label>
-      <p class="form-note">URL دسته /c/{slug} است. تغییر Slug ردیف ۳۰۱ در رجیستری Redirect می‌سازد.</p>
+      <p class="form-note">این فرم برای Category، SubCategory و LeafCat است. Vertical صفحه جدا ندارد. تغییر Slug ردیف ۳۰۱ می‌سازد.</p>
       <p class="form-error" id="form-error"></p>
     </div>
     <footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="save-cat-seo">تأیید SEO</button></footer>
@@ -390,17 +392,21 @@ function bindEvents() {
       state.modal = 'activate';
     }
     if (action === 'delete') state.modal = 'delete';
-    if (action === 'seo-cat') state.modal = 'seo-cat';
+    if (action === 'seo-cat') {
+      const current = findNode(state.selected)?.node;
+      if (!current || current.type === 'Vertical') return;
+      state.modal = 'seo-cat';
+    }
     if (action === 'save-cat-seo') {
       const found = findNode(state.selected);
       if (!found) return;
       ensureNodeSeo(found.node);
-      const slug = (document.querySelector('#cat-seo-slug')?.value || '').trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+      const slug = slugFromTitle(document.querySelector('#cat-seo-slug')?.value || found.node.name) || slugFromTitle(found.node.name);
       if (!slug) {
         document.querySelector('#form-error').textContent = 'Slug لازم است.';
         return;
       }
-      const taken = walk().some(({ node }) => node.id !== found.node.id && (node.seo?.slug || node.id) === slug);
+      const taken = walk().some(({ node }) => node.id !== found.node.id && node.type !== 'Vertical' && (node.seo?.slug || node.id) === slug);
       if (taken) {
         document.querySelector('#form-error').textContent = 'این Slug قبلاً برای دسته دیگری استفاده شده است.';
         return;
@@ -437,6 +443,7 @@ function bindEvents() {
       }
       const newNode = { id: uniqueId(type), name: title, type, status: 'active' };
       ensureNodeSeo(newNode);
+      if (type !== 'Vertical') newNode.seo.slug = uniqueCategorySlug(slugFromTitle(title) || newNode.id, newNode.id);
       siblings.push(newNode);
       if (parentId) state.expanded.add(parentId);
       state.selected = newNode.id;
@@ -529,9 +536,11 @@ function bindEvents() {
       const title = found.node.name;
       const gonePath = categoryPath(found.node);
       const nextSelected = found.parents.at(-1)?.id || tree.find(node => node.id !== state.selected)?.id;
-      catalog.redirects = (catalog.redirects || []).filter((row) => row.source !== gonePath);
-      catalog.redirects.unshift({ id: `r-410-${Date.now().toString(36)}`, source: gonePath, destination: '', code: '410' });
-      persistCatalog();
+      if (found.node.type !== 'Vertical') {
+        catalog.redirects = (catalog.redirects || []).filter((row) => row.source !== gonePath);
+        catalog.redirects.unshift({ id: `r-410-${Date.now().toString(36)}`, source: gonePath, destination: '', code: '410' });
+        persistCatalog();
+      }
       removeNode(state.selected);
       persistTree();
       logChange(`CAT Tree: حذف «${title}»`);

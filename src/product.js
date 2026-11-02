@@ -22,6 +22,8 @@ import {
   persistCatalog,
   productById,
   productPath,
+  slugFromTitle,
+  uniqueProductSlug,
   productMatchesContext,
   productsUsingBrand,
   purchasable,
@@ -540,7 +542,7 @@ function seoModal() {
       <label><span>Meta Description</span><textarea id="seo-description" placeholder="${escape(item.description)}">${escape(item.seo.description)}</textarea></label>
       <label class="check-line"><input id="seo-index" type="checkbox" ${item.seo.index ? 'checked' : ''}/>قابل ایندکس (Index / Noindex جدا از Follow است)</label>
       <div class="preview"><small>پیش‌نمایش</small><p id="seo-preview" dir="ltr">${escape(canonicalUrl(item))}</p><b>${escape(seoTitle(item))}</b><p>${escape(seoDescription(item))}</p></div>
-      <p class="form-note">تغییر Slug ردیف ۳۰۱ در رجیستری Redirect می‌سازد. URL محصول /p/{slug} است.</p>
+      <p class="form-note">اسلاگ پیش‌فرض از عنوان محصول ساخته می‌شود. تغییر آن ردیف ۳۰۱ در رجیستری Redirect می‌سازد. URL: /p/{slug}</p>
       <p class="form-error" id="form-error"></p>
     </div>
     <footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="save-seo">تأیید SEO</button></footer>
@@ -1010,7 +1012,8 @@ function saveProduct(rerender) {
     ui.productId = item.id;
   } else {
     const id = `prd-${Date.now().toString(36)}`;
-    catalog.products.push({ ...payload, id, status: 'draft', publishedAt: '', sales: 0, skus: [], links: [], aiCrossSell: [], seo: { slug: id, title: '', description: '', index: true, follow: true, canonical: '', redirects: [] } });
+    const slug = uniqueProductSlug(slugFromTitle(title) || id, id);
+    catalog.products.push({ ...payload, id, status: 'draft', publishedAt: '', sales: 0, skus: [], links: [], aiCrossSell: [], seo: { slug, title: '', description: '', index: true, follow: true, canonical: '', redirects: [] } });
     ui.productId = id;
     logChange(`ایجاد پیش‌نویس ${title || id}`);
   }
@@ -1070,7 +1073,7 @@ function setStatus(status, message, rerender) {
 
 function saveSeo(rerender) {
   const item = productById(ui.productId);
-  const slug = normalize(document.querySelector('#seo-slug')?.value).replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+  const slug = slugFromTitle(document.querySelector('#seo-slug')?.value || item.title) || slugFromTitle(item.title);
   if (!slug) return fail('Slug لازم است.');
   if (catalog.products.some((entry) => entry.id !== item.id && entry.seo.slug === slug)) return fail('این Slug قبلاً استفاده شده است.');
   const previous = productPath(item);

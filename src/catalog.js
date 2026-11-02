@@ -244,6 +244,42 @@ export function normalize(value) {
     .replace(/\s+/g, ' ');
 }
 
+export function slugFromTitle(title) {
+  return String(title ?? '')
+    .trim()
+    .replace(/[ي]/g, 'ی')
+    .replace(/[ك]/g, 'ک')
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)))
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^\u0600-\u06FFa-z0-9\-]+/g, '')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+export function uniqueProductSlug(base, exceptId) {
+  const root = base || 'product';
+  let slug = root;
+  let index = 2;
+  while (catalog.products.some((item) => item.id !== exceptId && (item.seo?.slug || item.id) === slug)) {
+    slug = `${root}-${index}`;
+    index += 1;
+  }
+  return slug;
+}
+
+export function uniqueCategorySlug(base, exceptId) {
+  const root = base || 'category';
+  let slug = root;
+  let index = 2;
+  while (walk().some(({ node }) => node.id !== exceptId && node.type !== 'Vertical' && (node.seo?.slug || node.id) === slug)) {
+    slug = `${root}-${index}`;
+    index += 1;
+  }
+  return slug;
+}
+
 export function toman(value) {
   return `${new Intl.NumberFormat('fa-IR').format(value)} تومان`;
 }
@@ -673,7 +709,7 @@ export function resolveRequest(input) {
   }
   if (path.startsWith('/c/')) {
     const found = nodeBySlug(path.slice(3));
-    if (!found) return { status: 404, path, kind: 'missing', note: 'دسته‌ای با این slug نیست.' };
+    if (!found || found.node.type === 'Vertical') return { status: 404, path, kind: 'missing', note: found?.node?.type === 'Vertical' ? 'Vertical صفحه عمومی ندارد.' : 'دسته‌ای با این slug نیست.' };
     const active = isActivePath(found.node, found.parents);
     return {
       status: 200,
