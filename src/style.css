@@ -2395,3 +2395,63 @@ svg {
 @media (prefers-reduced-motion: reduce) {
   .ux-btn, .skeleton { transition: none; }
 }
+.seo-shell {
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr);
+}
+.seo-shell .seo-table-card {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+.seo-shell .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.seo-follow {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 10px 0;
+  justify-content: space-between;
+}
+.seo-follow em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--muted);
+  direction: ltr;
+}
+.canonical-hint {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+.canonical-hint b { font-weight: 600; }
+.lookup-card {
+  margin-top: 12px;
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--ds-page);
+  border: 1px solid var(--line);
+}
+.lookup-card.status-200 { border-color: var(--green); }
+.lookup-card.status-301,
+.lookup-card.status-308 { border-color: var(--ds-text-brand); }
+.lookup-card.status-302,
+.lookup-card.status-307 { border-color: var(--ds-warning-text); }
+.lookup-card.status-404,
+.lookup-card.status-410 { border-color: var(--danger); }
+.lookup-card span { color: var(--muted); font-size: 10px; }
+.lookup-card b { display: block; font-size: 22px; margin: 4px 0; }
+.lookup-card small { display: block; margin-top: 6px; color: var(--muted); }
+.status-code {
+  font-style: normal;
+  font-size: 10px;
+  white-space: nowrap;
+}
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 900px) {
+  .seo-shell { grid-template-columns: 1fr; }
+}

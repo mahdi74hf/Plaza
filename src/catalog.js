@@ -1,6 +1,16 @@
 import { findNode, isActivePath, pathLabel, publicLeaves, walk } from './tree.js';
 
 export const CATALOG_KEY = 'plaza-product-catalog-v1';
+export const CANONICAL_HOST = 'https://www.plazadigital.ir';
+export const CANONICAL_HOST_NAME = 'www.plazadigital.ir';
+export const REDIRECT_CODES = [
+  { code: '301', label: '۳۰۱ انتقال دائمی', redirect: true, permanent: true },
+  { code: '302', label: '۳۰۲ انتقال موقت', redirect: true, permanent: false },
+  { code: '307', label: '۳۰۷ موقت با حفظ متد', redirect: true, permanent: false },
+  { code: '308', label: '۳۰۸ دائمی با حفظ متد', redirect: true, permanent: true },
+  { code: '404', label: '۴۰۴ پیدا نشد', redirect: false, permanent: false },
+  { code: '410', label: '۴۱۰ حذف قطعی', redirect: false, permanent: true },
+];
 export const SELLER = 'PLAZA';
 export const RETURN_POLICY = 'تا ۷ روز پس از تحویل، اگر کالا استفاده نشده و بسته‌بندی سالم باشد، امکان بازگشت وجود دارد.';
 export const PAGE_SIZE = 4;
@@ -160,13 +170,7 @@ function product(id, title, titleEn, model, leafId, brandId, status, publishedAt
     links: extra.links ?? [],
     tags: extra.tags ?? [],
     aiCrossSell: extra.aiCrossSell ?? [],
-    seo: {
-      slug: id,
-      title: '',
-      description: '',
-      index: true,
-      redirects: [],
-    },
+    seo: defaultProductSeo(id),
   };
 }
 
@@ -189,11 +193,17 @@ function readCatalog() {
     data.products?.forEach((item) => {
       if (!item.tags) item.tags = [];
       if (!item.aiCrossSell) item.aiCrossSell = [];
+      ensureProductSeo(item);
     });
+    if (!Array.isArray(data.redirects)) data.redirects = seedRedirects();
+    migrateLegacyRedirects(data);
     Object.values(data.schemas || {}).forEach((fields) => fields.forEach(normalizeField));
     return data;
   } catch {
-    return seed();
+    const data = seed();
+    data.products?.forEach(ensureProductSeo);
+    data.redirects = seedRedirects();
+    return data;
   }
 }
 
@@ -454,7 +464,229 @@ export function seoDescription(item) {
 }
 
 export function canonicalPath(item) {
-  return `/p/${item.seo.slug || item.id}`;
+  return productPath(item);
+}
+
+function defaultProductSeo(id) {
+  return { slug: id, title: '', description: '', index: true, follow: true, canonical: '', redirects: [] };
+}
+
+export function ensureProductSeo(item) {
+  item.seo = { ...defaultProductSeo(item.id), ...(item.seo || {}) };
+  if (item.seo.follow === undefined) item.seo.follow = true;
+  if (!item.seo.canonical) item.seo.canonical = '';
+  if (!Array.isArray(item.seo.redirects)) item.seo.redirects = [];
+  return item.seo;
+}
+
+export function productPath(item) {
+  return `/p/${item.seo?.slug || item.id}`;
+}
+
+export function categoryPath(node) {
+  return `/c/${node.seo?.slug || node.id}`;
+}
+
+export function fullUrl(path) {
+  if (!path) return CANONICAL_HOST;
+  if (String(path).startsWith('http://') || String(path).startsWith('https://')) return path;
+  return `${CANONICAL_HOST}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
+export function canonicalUrl(item) {
+  const custom = String(item.seo?.canonical || '').trim();
+  if (custom) return custom.startsWith('http') ? custom : fullUrl(custom);
+  return fullUrl(productPath(item));
+}
+
+export function categoryCanonicalUrl(node) {
+  const custom = String(node.seo?.canonical || '').trim();
+  if (custom) return custom.startsWith('http') ? custom : fullUrl(custom);
+  return fullUrl(categoryPath(node));
+}
+
+export function parseToPath(input) {
+  const raw = String(input || '').trim();
+  if (!raw) return '';
+  try {
+    const url = raw.includes('://') ? new URL(raw) : new URL(raw.startsWith('/') ? raw : `/${raw}`, CANONICAL_HOST);
+    const path = (url.pathname || '/').replace(/\/+$/, '') || '/';
+    return path;
+  } catch {
+    const path = raw.split('?')[0].split('#')[0];
+    if (!path) return '';
+    return (path.startsWith('/') ? path : `/${path}`).replace(/\/+$/, '') || '/';
+  }
+}
+
+export function isRedirectCode(code) {
+  return ['301', '302', '307', '308'].includes(String(code));
+}
+
+export function redirectMeta(code) {
+  return REDIRECT_CODES.find((item) => item.code === String(code)) || null;
+}
+
+function seedRedirects() {
+  return [
+    { id: 'r-woo-iphone', source: '/product/iphone-14', destination: '/p/iphone', code: '301' },
+    { id: 'r-woo-heating', source: '/product-category/heating', destination: '/c/heating', code: '301' },
+    { id: 'r-gone', source: '/p/nokia-3310', destination: '', code: '410' },
+  ];
+}
+
+function migrateLegacyRedirects(data) {
+  for (const item of data.products || []) {
+    for (const source of item.seo?.redirects || []) {
+      const path = parseToPath(source);
+      if (!path || data.redirects.some((row) => row.source === path)) continue;
+      data.redirects.push({
+        id: `legacy-${item.id}-${path}`,
+        source: path,
+        destination: productPath(item),
+        code: '301',
+      });
+    }
+  }
+}
+
+export function wouldLoop(source, destination, exceptId) {
+  if (!source || !destination || source === destination) return source === destination;
+  const map = new Map(
+    (catalog.redirects || [])
+      .filter((row) => row.id !== exceptId && isRedirectCode(row.code) && row.source && row.destination)
+      .map((row) => [row.source, row.destination]),
+  );
+  map.set(source, destination);
+  const seen = new Set([source]);
+  let current = destination;
+  while (current && map.has(current)) {
+    if (seen.has(current)) return true;
+    seen.add(current);
+    current = map.get(current);
+    if (seen.size > 20) return true;
+  }
+  return false;
+}
+
+export function upsertRedirect({ source, destination, code, exceptId }) {
+  const src = parseToPath(source);
+  const codeValue = String(code);
+  const redirect = isRedirectCode(codeValue);
+  const dest = redirect ? parseToPath(destination) : '';
+  if (!src) return { error: 'آدرس مبدأ لازم است.' };
+  if (!redirectMeta(codeValue)) return { error: 'کد وضعیت نامعتبر است.' };
+  if (redirect && !dest) return { error: 'برای انتقال، آدرس مقصد لازم است.' };
+  if (redirect && wouldLoop(src, dest, exceptId)) return { error: 'این ردیف حلقه Redirect می‌سازد.' };
+  const duplicate = (catalog.redirects || []).find((row) => row.id !== exceptId && row.source === src);
+  if (duplicate) return { error: 'برای این مبدأ ردیف فعال وجود دارد. همان ردیف را ویرایش کن.' };
+  const row = {
+    id: exceptId || `r-${Date.now().toString(36)}`,
+    source: src,
+    destination: dest,
+    code: codeValue,
+  };
+  if (exceptId) {
+    const index = catalog.redirects.findIndex((item) => item.id === exceptId);
+    if (index >= 0) catalog.redirects[index] = row;
+    else catalog.redirects.unshift(row);
+  } else {
+    catalog.redirects.unshift(row);
+  }
+  return { row };
+}
+
+export function productBySlug(slug) {
+  return catalog.products.find((item) => (item.seo?.slug || item.id) === slug) || null;
+}
+
+export function nodeBySlug(slug) {
+  return walk().find(({ node }) => (node.seo?.slug || node.id) === slug) || null;
+}
+
+export function resolveRequest(input) {
+  const raw = String(input || '').trim();
+  const path = parseToPath(raw);
+  if (!path) return { status: 400, path: '', note: 'آدرس خالی است.', kind: 'error' };
+  if (raw.includes('://')) {
+    try {
+      const host = new URL(raw).hostname;
+      if (host && host !== CANONICAL_HOST_NAME) {
+        return {
+          status: 301,
+          path,
+          location: fullUrl(path),
+          kind: 'host',
+          note: `هاست غیرکنونیکال «${host}» به ${CANONICAL_HOST_NAME} منتقل می‌شود.`,
+        };
+      }
+    } catch {
+      /* keep going */
+    }
+  }
+  const row = (catalog.redirects || []).find((item) => item.source === path);
+  if (row) {
+    if (isRedirectCode(row.code)) {
+      return {
+        status: Number(row.code),
+        path,
+        location: fullUrl(row.destination),
+        kind: 'redirect',
+        note: redirectMeta(row.code)?.label || row.code,
+        row,
+      };
+    }
+    return {
+      status: Number(row.code),
+      path,
+      kind: 'gone',
+      note: row.code === '410' ? 'این URL برای همیشه حذف شده است. مقصد ندارد.' : 'صفحه پیدا نشد. مقصد ندارد.',
+      row,
+    };
+  }
+  if (path.startsWith('/p/')) {
+    const item = productBySlug(path.slice(3));
+    if (!item) return { status: 404, path, kind: 'missing', note: 'محصولی با این slug نیست.' };
+    const oos = !item.skus.some((sku) => sellable(sku) > 0);
+    if (item.status === 'published') {
+      return {
+        status: 200,
+        path,
+        kind: 'product',
+        item,
+        follow: item.seo.follow !== false,
+        index: item.seo.index !== false,
+        canonical: canonicalUrl(item),
+        note: oos ? 'منتشر و ناموجود — صفحه ۲۰۰ می‌ماند و ایندکس می‌شود.' : 'صفحه محصول منتشرشده.',
+      };
+    }
+    return {
+      status: 200,
+      path,
+      kind: 'product',
+      item,
+      follow: item.seo.follow !== false,
+      index: false,
+      canonical: canonicalUrl(item),
+      note: 'خارج از انتشار است؛ ۴۰۴ نمی‌شود. برای حذف قطعی URL در رجیستری کد ۴۱۰ بگذار.',
+    };
+  }
+  if (path.startsWith('/c/')) {
+    const found = nodeBySlug(path.slice(3));
+    if (!found) return { status: 404, path, kind: 'missing', note: 'دسته‌ای با این slug نیست.' };
+    const active = isActivePath(found.node, found.parents);
+    return {
+      status: 200,
+      path,
+      kind: 'category',
+      node: found.node,
+      follow: found.node.seo?.follow !== false,
+      index: active && found.node.seo?.index !== false,
+      canonical: categoryCanonicalUrl(found.node),
+      note: active ? 'صفحه دسته.' : 'نود غیرفعال است؛ ایندکس نمی‌شود.',
+    };
+  }
+  return { status: 404, path, kind: 'missing', note: 'این مسیر در کاتالوگ یا رجیستری نیست.' };
 }
 
 export function libraryAttributes() {

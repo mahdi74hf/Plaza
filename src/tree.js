@@ -32,9 +32,29 @@ export function loadTree() {
     const saved = localStorage.getItem(STORAGE_KEY);
     const data = saved ? JSON.parse(saved) : structuredClone(defaultTree);
     ensureShopDemoNodes(data);
+    ensureTreeSeo(data);
     return data;
   } catch {
-    return structuredClone(defaultTree);
+    const data = structuredClone(defaultTree);
+    ensureTreeSeo(data);
+    return data;
+  }
+}
+
+export function ensureNodeSeo(node) {
+  node.seo = {
+    slug: node.seo?.slug || node.id,
+    follow: node.seo?.follow !== false,
+    index: node.seo?.index !== false,
+    canonical: node.seo?.canonical || '',
+  };
+  return node.seo;
+}
+
+export function ensureTreeSeo(nodes = tree) {
+  for (const node of nodes) {
+    ensureNodeSeo(node);
+    if (node.children) ensureTreeSeo(node.children);
   }
 }
 

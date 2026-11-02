@@ -2,8 +2,9 @@ import './style.css';
 import { applyProductDeepLink, bindProduct, openProductGaps, productContent, productMeta } from './product.js';
 import { bindSearch, searchContent } from './search.js';
 import { bindSupply, financeContent, stockContent, supplyContent } from './supply.js';
-import { logChange, productsOnLeaf } from './catalog.js';
-import { countActiveType, countNodes, countType, findNode, getSiblings, persistTree, removeNode, tree } from './tree.js';
+import { CANONICAL_HOST, catalog, categoryCanonicalUrl, categoryPath, logChange, persistCatalog, productsOnLeaf } from './catalog.js';
+import { addSlugRedirect, canonicalField, followField } from './seo.js';
+import { countActiveType, countNodes, countType, ensureNodeSeo, findNode, getSiblings, persistTree, removeNode, tree, walk } from './tree.js';
 
 const icon = (name) => ({
   grid: '<svg viewBox="0 0 24 24"><path d="M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z"/></svg>',
@@ -100,6 +101,7 @@ function detailPanel() {
     <div class="detail-head">
       <div><span class="type-pill ${node.type.toLowerCase()}">${node.type}</span><span class="active-pill ${effectiveActive ? '' : 'inactive'}"><i></i>${statusLabel}</span><h2>${escapeHtml(node.name)}</h2><p>شناسه: ${node.id}</p></div>
       <div class="detail-actions">
+        <button class="action-button" data-action="seo-cat">SEO</button>
         <button class="action-button" data-action="edit">ویرایش</button>
         ${node.status === 'inactive'
           ? `<button class="action-button success" data-action="activate" ${parentBlocked ? 'title="ابتدا Parent را فعال کن"' : ''}>فعال‌سازی</button>`
@@ -114,6 +116,8 @@ function detailPanel() {
       <div><span>وضعیت ذخیره‌شده</span><b>${node.status === 'inactive' ? 'غیرفعال' : 'فعال'}</b></div>
       <div><span>وضعیت مؤثر</span><b>${effectiveActive ? 'فعال' : 'غیرفعال'}</b></div>
       <div><span>Child مجاز</span><b>${allowed.length ? allowed.join(' / ') : 'ندارد'}</b></div>
+      <div><span>Canonical</span><b dir="ltr">${escapeHtml(categoryCanonicalUrl(node))}</b></div>
+      <div><span>Follow</span><b>${node.seo?.follow === false ? 'nofollow' : 'follow'}</b></div>
     </div>
     ${parentBlocked ? `<div class="delete-warning blocked"><b>Parent غیرفعال است</b><p>${node.status === 'active' ? 'این نود با وجود وضعیت ذخیره‌شده «فعال»، تا فعال‌شدن مسیر بالادست غیرفعال مؤثر باقی می‌ماند.' : 'برای فعال‌سازی این نود، ابتدا مسیر بالادست را فعال کن.'}</p></div>` : ''}
     ${node.type === 'LeafCat' && effectiveActive ? `<div class="leaf-note">${icon('check')}<div><b>این نود برای اتصال Product معتبر است</b><p>فقط LeafCat فعال با تمام Parentهای فعال می‌تواند Category نهایی Product باشد.</p></div></div>` : ''}
@@ -217,6 +221,26 @@ function activateModal() {
   </section></div>`;
 }
 
+function categorySeoModal() {
+  const found = findNode(state.selected);
+  if (!found) return '';
+  const node = found.node;
+  ensureNodeSeo(node);
+  const defaultUrl = `${CANONICAL_HOST}${categoryPath(node)}`;
+  return `<div class="backdrop" data-action="close"><section class="modal" onclick="event.stopPropagation()">
+    <header><div><span>PRD-045 · PRD-069</span><h2>SEO دسته</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
+    <div class="modal-body">
+      <label><span>Slug</span><input id="cat-seo-slug" dir="ltr" value="${escapeHtml(node.seo.slug)}" /></label>
+      ${canonicalField(defaultUrl, node.seo.canonical).replace('id="seo-canonical"', 'id="cat-seo-canonical"')}
+      ${followField(node.seo.follow !== false).replace('id="seo-follow"', 'id="cat-seo-follow"')}
+      <label class="check-line"><input id="cat-seo-index" type="checkbox" ${node.seo.index ? 'checked' : ''}/>قابل ایندکس</label>
+      <p class="form-note">URL دسته /c/{slug} است. تغییر Slug ردیف ۳۰۱ در رجیستری Redirect می‌سازد.</p>
+      <p class="form-error" id="form-error"></p>
+    </div>
+    <footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="save-cat-seo">تأیید SEO</button></footer>
+  </section></div>`;
+}
+
 function decisionsModal() {
   return `<div class="backdrop" data-action="close"><section class="modal decisions" onclick="event.stopPropagation()">
     <header><div><span>GAPS</span><h2>تصمیم‌های باز PRD-001</h2></div><button class="icon-button" data-action="close">${icon('close')}</button></header>
@@ -269,7 +293,7 @@ function render() {
         <section class="scope"><div>${icon('info')}<span><b>ذخیره‌سازی Prototype</b><small>عملیات ایجاد، مشاهده، ویرایش و حذف در localStorage مرورگر ذخیره می‌شود؛ SEO و نمایش سایت در PRDهای بعدی هستند.</small></span></div><button data-action="decisions">مشاهده کمبودهای PRD</button></section>`}
       </div>
     </main>
-    ${product || search || flow ? '' : (state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'deactivate' ? deactivateModal() : state.modal === 'activate' ? activateModal() : state.modal === 'decisions' ? decisionsModal() : '')}
+    ${product || search || flow ? '' : (state.modal === 'create' || state.modal === 'root' ? createModal() : state.modal === 'edit' ? editModal() : state.modal === 'seo-cat' ? categorySeoModal() : state.modal === 'delete' ? deleteModal() : state.modal === 'deactivate' ? deactivateModal() : state.modal === 'activate' ? activateModal() : state.modal === 'decisions' ? decisionsModal() : '')}
     ${!product && state.toast ? `<div class="toast">${icon('check')} ${state.toast}</div>` : ''}
   </div>`;
   bindEvents();
@@ -366,6 +390,34 @@ function bindEvents() {
       state.modal = 'activate';
     }
     if (action === 'delete') state.modal = 'delete';
+    if (action === 'seo-cat') state.modal = 'seo-cat';
+    if (action === 'save-cat-seo') {
+      const found = findNode(state.selected);
+      if (!found) return;
+      ensureNodeSeo(found.node);
+      const slug = (document.querySelector('#cat-seo-slug')?.value || '').trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
+      if (!slug) {
+        document.querySelector('#form-error').textContent = 'Slug لازم است.';
+        return;
+      }
+      const taken = walk().some(({ node }) => node.id !== found.node.id && (node.seo?.slug || node.id) === slug);
+      if (taken) {
+        document.querySelector('#form-error').textContent = 'این Slug قبلاً برای دسته دیگری استفاده شده است.';
+        return;
+      }
+      const previous = categoryPath(found.node);
+      if (slug !== found.node.seo.slug) addSlugRedirect(previous, `/c/${slug}`);
+      found.node.seo.slug = slug;
+      found.node.seo.canonical = document.querySelector('#cat-seo-canonical')?.value.trim() || '';
+      found.node.seo.follow = !!document.querySelector('#cat-seo-follow')?.checked;
+      found.node.seo.index = !!document.querySelector('#cat-seo-index')?.checked;
+      persistTree();
+      persistCatalog();
+      logChange(`SEO دسته «${found.node.name}» ذخیره شد`);
+      state.modal = null;
+      showToast('تنظیم SEO دسته ذخیره شد');
+      return;
+    }
     if (action === 'decisions') state.modal = 'decisions';
     if (action === 'close') state.modal = null;
     if (action === 'save') {
@@ -384,6 +436,7 @@ function bindEvents() {
         return;
       }
       const newNode = { id: uniqueId(type), name: title, type, status: 'active' };
+      ensureNodeSeo(newNode);
       siblings.push(newNode);
       if (parentId) state.expanded.add(parentId);
       state.selected = newNode.id;
@@ -474,7 +527,11 @@ function bindEvents() {
     if (action === 'confirm-delete') {
       const found = findNode(state.selected);
       const title = found.node.name;
+      const gonePath = categoryPath(found.node);
       const nextSelected = found.parents.at(-1)?.id || tree.find(node => node.id !== state.selected)?.id;
+      catalog.redirects = (catalog.redirects || []).filter((row) => row.source !== gonePath);
+      catalog.redirects.unshift({ id: `r-410-${Date.now().toString(36)}`, source: gonePath, destination: '', code: '410' });
+      persistCatalog();
       removeNode(state.selected);
       persistTree();
       logChange(`CAT Tree: حذف «${title}»`);
@@ -485,6 +542,10 @@ function bindEvents() {
     }
     render();
   }));
+  document.querySelector('#cat-seo-follow')?.addEventListener('change', (event) => {
+    const em = event.target.closest('.seo-follow')?.querySelector('em');
+    if (em) em.textContent = event.target.checked ? 'follow' : 'nofollow';
+  });
   const titleInput = document.querySelector('#node-title');
   if (titleInput) titleInput.addEventListener('input', event => {
     const previewName = document.querySelector('#preview-name');

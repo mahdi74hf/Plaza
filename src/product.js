@@ -6,7 +6,9 @@ import {
   brandById,
   brandsForLeaf,
   canPublish,
+  CANONICAL_HOST,
   canonicalPath,
+  canonicalUrl,
   catalog,
   displaySku,
   duplicateBrand,
@@ -19,6 +21,7 @@ import {
   passesFilters,
   persistCatalog,
   productById,
+  productPath,
   productMatchesContext,
   productsUsingBrand,
   purchasable,
@@ -53,6 +56,16 @@ import {
 } from './crawler.js';
 import { handleInventoryChange, handleInventoryClick, inventoryView } from './inventory.js';
 import { handleShopLayoutChange, handleShopLayoutClick, shopLayoutView } from './shop-layout.js';
+import {
+  addSlugRedirect,
+  canonicalField,
+  followField,
+  handleSeoChange,
+  handleSeoClick,
+  handleSeoInput,
+  redirectsView,
+  seoUi,
+} from './seo.js';
 import { findNode, pathLabel, walk } from './tree.js';
 
 const ui = {
@@ -72,6 +85,7 @@ const tabs = [
   ['brands', 'برند', 'PRD-046'],
   ['variants', 'واریانت', 'PRD-047'],
   ['products', 'محصول', 'PRD-032'],
+  ['redirects', 'Redirect و وضعیت HTTP', 'PRD-069'],
   ['crawler', 'کرالر', 'PRD-066'],
 ];
 
@@ -123,7 +137,7 @@ export function productContent(icon) {
       ${headAction(icon)}
     </div>
     <div class="prd-tabs">${tabs.map(([id, label, code]) => `<button type="button" data-tab="${id}" class="${ui.tab === id ? 'active' : ''}">${label}<small>${code}</small></button>`).join('')}</div>
-    ${ui.tab === 'inventory' ? inventoryView() : ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : productsView()}
+    ${ui.tab === 'inventory' ? inventoryView() : ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : ui.tab === 'redirects' ? redirectsView() : productsView()}
     <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>ویژگی LeafCat، برند، واریانت و محصول در localStorage همین مرورگر می‌مانند.</small></span></div></section>
     ${modalHtml()}
     ${ui.toast ? `<div class="toast">${icon('check')} ${escape(ui.toast)}</div>` : ''}
@@ -132,7 +146,7 @@ export function productContent(icon) {
 
 function heading() {
   if (ui.tab === 'crawler') return crawlerHeading();
-  return { inventory: 'مدیریت قیمت و موجودی', 'shop-layout': 'چیدمان منعطف دسته‌بندی‌های Shop', schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ' }[ui.tab] || 'محصولات کاتالوگ';
+  return { inventory: 'مدیریت قیمت و موجودی', 'shop-layout': 'چیدمان منعطف دسته‌بندی‌های Shop', schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ', redirects: 'Redirect و وضعیت HTTP' }[ui.tab] || 'محصولات کاتالوگ';
 }
 
 function subhead() {
@@ -144,6 +158,7 @@ function subhead() {
     brands: 'ایجاد برند، محدودکردن آن به LeafCat و جلوگیری از غیرفعال‌سازی برند در حال استفاده',
     variants: 'حداکثر دو محور Variant از ویژگی‌های انتخابی همان LeafCat',
     products: 'اتصال به یک LeafCat فعال، ذخیره Draft و انتشار پس از تأیید',
+    redirects: 'رجیستری سراسری مبدأ، مقصد و کد وضعیت — جدا از فرم محصول',
   }[ui.tab];
 }
 
@@ -255,7 +270,8 @@ function productDetail(item) {
       <div><span>تصویر اصلی</span><b>${item.image ? 'دارد' : 'ندارد'}</b></div>
       <div><span>SKU</span><b>${fa(item.skus.length)}</b></div>
       <div><span>Tagها</span><b>${item.tags?.length ? item.tags.map((id) => catalog.marketingTags.find((tag) => tag.id === id)?.label || id).join('، ') : '—'}</b></div>
-      <div><span>Canonical</span><b>${escape(canonicalPath(item))}</b></div>
+      <div><span>Canonical</span><b dir="ltr">${escape(canonicalUrl(item))}</b></div>
+      <div><span>Follow</span><b>${item.seo.follow === false ? 'nofollow' : 'follow'}</b></div>
     </div>
     ${needsSchemaUpdate(item) ? '<div class="delete-warning blocked"><b>Needs Update</b><p>یک ویژگی اجباری جدید برای این محصول خالی است. انتشار قبلی حفظ شده است.</p></div>' : ''}
     ${errors.length && item.status !== 'published' ? `<div class="delete-warning blocked"><b>قبل از انتشار</b><p>${errors.map(escape).join(' ')}</p></div>` : ''}
@@ -407,7 +423,7 @@ function modalHtml() {
   if (ui.modal === 'product') return productModal();
   if (ui.modal === 'sku') return skuModal();
   if (ui.modal === 'publish') return publishPreviewModal();
-  if (ui.modal === 'unpublish') return confirmModal('غیرفعال‌سازی محصول', 'فروش جدید متوقف می‌شود. سفارش قبلی و نظرهای ثبت‌شده پاک نمی‌شوند.', 'confirm-unpublish', 'غیرفعال شود');
+  if (ui.modal === 'unpublish') return confirmModal('غیرفعال‌سازی محصول', 'فروش جدید متوقف می‌شود و صفحه ۴۰۴ نمی‌شود. حذف دائمی محصول در MVP نیست. اگر گوگل باید این URL را برای همیشه رها کند، در تب Redirect کد ۴۱۰ بگذار.', 'confirm-unpublish', 'غیرفعال شود');
   if (ui.modal === 'seo') return seoModal();
   if (ui.modal === 'links') return linksModal();
   if (ui.modal === 'reject') return rejectModal();
@@ -513,15 +529,18 @@ function skuModal() {
 
 function seoModal() {
   const item = productById(ui.productId);
+  const defaultUrl = `${CANONICAL_HOST}${productPath(item)}`;
   return `<div class="backdrop"><section class="modal" onclick="event.stopPropagation()">
-    <header><div><span>PRD-050</span><h2>SEO محصول</h2></div><button class="icon-button" data-action="close">×</button></header>
+    <header><div><span>PRD-050 · PRD-069</span><h2>SEO محصول</h2></div><button class="icon-button" data-action="close">×</button></header>
     <div class="modal-body">
-      <label><span>Slug</span><input id="seo-slug" value="${escape(item.seo.slug)}" /></label>
+      <label><span>Slug</span><input id="seo-slug" dir="ltr" value="${escape(item.seo.slug)}" /></label>
+      ${canonicalField(defaultUrl, item.seo.canonical)}
+      ${followField(item.seo.follow !== false)}
       <label><span>عنوان SEO</span><input id="seo-title" value="${escape(item.seo.title)}" placeholder="${escape(item.title)}" /></label>
       <label><span>Meta Description</span><textarea id="seo-description" placeholder="${escape(item.description)}">${escape(item.seo.description)}</textarea></label>
-      <label class="check-line"><input id="seo-index" type="checkbox" ${item.seo.index ? 'checked' : ''}/>قابل ایندکس</label>
-      <div class="preview"><small>پیش‌نمایش</small><p id="seo-preview">${escape(canonicalPath(item))}</p><b>${escape(seoTitle(item))}</b><p>${escape(seoDescription(item))}</p></div>
-      ${item.seo.redirects.length ? `<p class="form-note">Redirectهای قبلی: ${item.seo.redirects.map(escape).join(' ، ')}</p>` : ''}
+      <label class="check-line"><input id="seo-index" type="checkbox" ${item.seo.index ? 'checked' : ''}/>قابل ایندکس (Index / Noindex جدا از Follow است)</label>
+      <div class="preview"><small>پیش‌نمایش</small><p id="seo-preview" dir="ltr">${escape(canonicalUrl(item))}</p><b>${escape(seoTitle(item))}</b><p>${escape(seoDescription(item))}</p></div>
+      <p class="form-note">تغییر Slug ردیف ۳۰۱ در رجیستری Redirect می‌سازد. URL محصول /p/{slug} است.</p>
       <p class="form-error" id="form-error"></p>
     </div>
     <footer><button class="ghost" data-action="close">انصراف</button><button class="primary" data-action="save-seo">تأیید SEO</button></footer>
@@ -623,6 +642,21 @@ export function bindProduct(rerender) {
   if (!root) return;
   root.addEventListener('click', (event) => onClick(event, rerender), true);
   root.addEventListener('change', (event) => onChange(event, rerender));
+  root.addEventListener('input', (event) => {
+    if (handleSeoInput(event.target)) return;
+    if (event.target.id === 'seo-follow') {
+      const em = event.target.closest('.seo-follow')?.querySelector('em');
+      if (em) em.textContent = event.target.checked ? 'follow' : 'nofollow';
+    }
+    if (event.target.id === 'seo-slug') {
+      const preview = document.querySelector('#seo-preview');
+      const hint = document.querySelector('.canonical-hint b');
+      const slug = event.target.value.trim() || productById(ui.productId)?.id || '';
+      const url = `${CANONICAL_HOST}/p/${slug}`;
+      if (preview && !document.querySelector('#seo-canonical')?.value.trim()) preview.textContent = url;
+      if (hint) hint.textContent = url;
+    }
+  });
 }
 
 function onClick(event, rerender) {
@@ -657,6 +691,13 @@ function onClick(event, rerender) {
   if (!action) return;
   if (handleInventoryClick(action, actionHost, rerender)) return;
   if (handleShopLayoutClick(action, actionHost, rerender)) return;
+  if (handleSeoClick(action, actionHost, rerender)) {
+    if (seoUi.toast) {
+      seoUi.toast = false;
+      toast('ردیف Redirect ذخیره شد', rerender);
+    }
+    return;
+  }
   if (action === 'close') { ui.modal = null; rerender(); return; }
   if (action === 'new-brand') { ui.editingId = null; ui.modal = 'brand'; rerender(); return; }
   if (action === 'edit-brand') { ui.editingId = ui.brandId; ui.modal = 'brand'; rerender(); return; }
@@ -765,6 +806,7 @@ function onChange(event, rerender) {
   const target = event.target;
   if (handleInventoryChange(target, rerender)) return;
   if (handleShopLayoutChange(target, rerender)) return;
+  if (handleSeoChange(target, rerender)) return;
   if (target.dataset.field === 'customer') { ui.customerId = target.value; rerender(); return; }
   if (target.id === 'attr-leaf' || target.id === 'attr-type') return;
   if (target.id === 'product-leaf') {
@@ -968,7 +1010,7 @@ function saveProduct(rerender) {
     ui.productId = item.id;
   } else {
     const id = `prd-${Date.now().toString(36)}`;
-    catalog.products.push({ ...payload, id, status: 'draft', publishedAt: '', sales: 0, skus: [], links: [], aiCrossSell: [], seo: { slug: id, title: '', description: '', index: true, redirects: [] } });
+    catalog.products.push({ ...payload, id, status: 'draft', publishedAt: '', sales: 0, skus: [], links: [], aiCrossSell: [], seo: { slug: id, title: '', description: '', index: true, follow: true, canonical: '', redirects: [] } });
     ui.productId = id;
     logChange(`ایجاد پیش‌نویس ${title || id}`);
   }
@@ -1031,11 +1073,17 @@ function saveSeo(rerender) {
   const slug = normalize(document.querySelector('#seo-slug')?.value).replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '');
   if (!slug) return fail('Slug لازم است.');
   if (catalog.products.some((entry) => entry.id !== item.id && entry.seo.slug === slug)) return fail('این Slug قبلاً استفاده شده است.');
-  if (slug !== item.seo.slug) item.seo.redirects.push(`/p/${item.seo.slug}`);
+  const previous = productPath(item);
+  if (slug !== item.seo.slug) {
+    item.seo.redirects.push(previous);
+    addSlugRedirect(previous, `/p/${slug}`);
+  }
   item.seo.slug = slug;
   item.seo.title = document.querySelector('#seo-title')?.value.trim() || '';
   item.seo.description = document.querySelector('#seo-description')?.value.trim() || '';
   item.seo.index = !!document.querySelector('#seo-index')?.checked;
+  item.seo.follow = !!document.querySelector('#seo-follow')?.checked;
+  item.seo.canonical = document.querySelector('#seo-canonical')?.value.trim() || '';
   logChange(`SEO ${item.title} ذخیره شد`);
   persistCatalog();
   ui.modal = null;

@@ -337,7 +337,7 @@ function createDraftFromCrawl(item) {
     links: [],
     sourceUrl: item.url,
     crawlSource: item.source,
-    seo: { slug: draftId, title: '', description: '', index: false, redirects: [] },
+    seo: { slug: draftId, title: '', description: '', index: false, follow: true, canonical: '', redirects: [] },
   });
   logChange(`کرالر: Draft ${title}`);
   persistCatalog();
