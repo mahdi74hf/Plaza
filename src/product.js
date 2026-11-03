@@ -40,6 +40,8 @@ import {
   toman,
   variantAxes,
   PAGE_SIZE,
+  syncFilterPanel,
+  FILTER_TYPES,
 } from './catalog.js';
 import {
   cancelJob,
@@ -79,6 +81,13 @@ import {
   handleBulkClick,
   openBulkWizard,
 } from './bulk.js';
+import {
+  bindFilterHost,
+  filterableHint,
+  filtersView,
+  handleFiltersChange,
+  handleFiltersClick,
+} from './filters.js';
 
 const ui = {
   tab: 'products',
@@ -94,6 +103,7 @@ const tabs = [
   ['inventory', 'مدیریت قیمت و موجودی', 'PRD-068'],
   ['shop-layout', 'چیدمان Shop', 'PRD-055'],
   ['schema', 'ویژگی', 'PRD-044'],
+  ['filters', 'فیلترهای دسته', 'PRD-071'],
   ['brands', 'برند', 'PRD-046'],
   ['variants', 'واریانت', 'PRD-047'],
   ['products', 'محصول', 'PRD-032'],
@@ -156,7 +166,7 @@ export function productContent(icon) {
       ${headAction(icon)}
     </div>
     <div class="prd-tabs">${tabs.map(([id, label, code]) => `<button type="button" data-tab="${id}" class="${ui.tab === id ? 'active' : ''}">${label}<small>${code}</small></button>`).join('')}</div>
-    ${ui.tab === 'inventory' ? inventoryView() : ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : ui.tab === 'redirects' ? redirectsView() : bulkState.open ? bulkView() : productsView()}
+    ${ui.tab === 'inventory' ? inventoryView() : ui.tab === 'shop-layout' ? shopLayoutView() : ui.tab === 'schema' ? schemaView() : ui.tab === 'filters' ? (bindFilterHost(ui.leafId), filtersView()) : ui.tab === 'brands' ? brandsView() : ui.tab === 'variants' ? variantsView() : ui.tab === 'crawler' ? crawlerView(icon) : ui.tab === 'redirects' ? redirectsView() : bulkState.open ? bulkView() : productsView()}
     <section class="scope"><div><span><b>ذخیره‌سازی Prototype</b><small>ویژگی LeafCat، برند، واریانت و محصول در localStorage همین مرورگر می‌مانند.</small></span></div></section>
     ${modalHtml()}
     ${ui.toast ? `<div class="toast">${icon('check')} ${escape(ui.toast)}</div>` : ''}
@@ -166,7 +176,7 @@ export function productContent(icon) {
 function heading() {
   if (ui.tab === 'crawler') return crawlerHeading();
   if (ui.tab === 'products' && bulkState.open) return bulkHeading();
-  return { inventory: 'مدیریت قیمت و موجودی', 'shop-layout': 'چیدمان منعطف دسته‌بندی‌های Shop', schema: 'ویژگی‌های LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ', redirects: 'Redirect و وضعیت HTTP' }[ui.tab] || 'محصولات کاتالوگ';
+  return { inventory: 'مدیریت قیمت و موجودی', 'shop-layout': 'چیدمان منعطف دسته‌بندی‌های Shop', schema: 'ویژگی‌های LeafCat', filters: 'فیلترهای هر LeafCat', brands: 'برند محصول', variants: 'واریانت و SKU', products: 'محصولات کاتالوگ', redirects: 'Redirect و وضعیت HTTP' }[ui.tab] || 'محصولات کاتالوگ';
 }
 
 function subhead() {
@@ -175,7 +185,8 @@ function subhead() {
   return {
     inventory: 'قیمت، تخفیف و موجودی آماری و غیرآماری روی هر SKU',
     'shop-layout': 'ساختار سه‌سطحی: مقصد LeafCat یا لندینگ، همراه Filter برند، تگ و نوع',
-    schema: 'برای هر LeafCat ویژگی بساز و نوع آن را مشخص کن؛ مثلاً حافظه رم از جنس عدد',
+    schema: 'برای هر ویژگی مشخص کن فیلتر هست یا نه؛ اگر هست عنوان، نوع و جست‌وجوی داخل فیلتر را بگذار',
+    filters: 'کدام فیلترها دیده شوند، ترتیب، عنوان اختصاصی، باز یا بسته بودن و Bucket همان دسته',
     brands: 'ایجاد برند، محدودکردن آن به LeafCat و جلوگیری از غیرفعال‌سازی برند در حال استفاده',
     variants: 'حداکثر دو محور Variant از ویژگی‌های انتخابی همان LeafCat',
     products: 'اتصال به یک LeafCat فعال، ذخیره Draft و انتشار پس از تأیید',
@@ -204,7 +215,7 @@ function schemaView() {
     ${leaf ? `<section class="card detail-card">
       <div class="detail-head"><div><span class="type-pill leafcat">PRD-044</span><h2>${escape(leaf.node.name)}</h2><p>${escape(pathLabel(leaf.node.id))}</p></div></div>
       <div class="schema-list">${schema.map((field) => `<article>
-        <div><b>${escape(field.label)}</b><small>${typeLabels[field.dataType] || field.dataType}${field.unit ? ` · ${escape(field.unit)}` : ''}${field.required ? ' · اجباری' : ''}${field.variant ? ' · Variant' : ''}${field.active ? '' : ' · غیرفعال'}</small></div>
+        <div><b>${escape(field.label)}</b><small>${typeLabels[field.dataType] || field.dataType}${field.unit ? ` · ${escape(field.unit)}` : ''}${field.required ? ' · اجباری' : ''}${field.variant ? ' · Variant' : ''}${filterableHint(field)}${field.active ? '' : ' · غیرفعال'}</small></div>
         <div class="detail-actions"><button class="action-button" data-action="edit-attribute" data-key="${field.key}">ویرایش</button><button class="action-button" data-action="toggle-attribute" data-key="${field.key}">${field.active ? 'غیرفعال' : 'فعال'}</button></div>
       </article>`).join('') || '<p class="empty-copy">هنوز ویژگی‌ای تعریف نشده. مثلاً برای گوشی می‌توانی «حافظه رم» را با نوع عدد بسازی.</p>'}</div>
       ${auditBox()}
@@ -499,7 +510,13 @@ function attributeModal() {
       <label><span>واحد، فقط برای عدد</span><input id="attr-unit" value="${escape(existing?.unit || '')}" placeholder="مثلاً گیگابایت" /></label>
       <label><span>مقادیر مجاز، فقط برای انتخابی</span><textarea id="attr-options" placeholder="هر مقدار در یک خط">${escape((existing?.options || []).join('\n'))}</textarea></label>
       <label class="check-line"><input id="attr-required" type="checkbox" ${existing?.required ? 'checked' : ''}/>اجباری</label>
-      <label class="check-line"><input id="attr-filterable" type="checkbox" ${existing?.filterable ? 'checked' : ''}/>قابل فیلتر در فهرست</label>
+      <label class="check-line"><input id="attr-filterable" type="checkbox" ${existing?.filterable ? 'checked' : ''}/>از این ویژگی به‌عنوان فیلتر استفاده شود</label>
+      <div id="attr-filter-box" class="${existing?.filterable ? '' : 'is-hidden'}">
+        <label><span>عنوان فیلتر</span><input id="attr-filter-title" value="${escape(existing?.filterTitle || existing?.label || '')}" placeholder="مثلاً حافظه" /></label>
+        <label><span>نوع فیلتر</span><select id="attr-filter-type">${FILTER_TYPES.map((item) => `<option value="${item.id}" ${existing?.filterType === item.id ? 'selected' : ''}>${item.label}</option>`).join('')}</select></label>
+        <label class="check-line" id="attr-search-line"><input id="attr-filter-search" type="checkbox" ${existing?.filterSearch ? 'checked' : ''}/>جست‌وجو داخل همین فیلتر، برای فهرست‌های بلند</label>
+        <p class="form-note">Range فقط برای ویژگی عدد است. ترتیب و Bucket در تب فیلترهای دسته تنظیم می‌شود.</p>
+      </div>
       <label class="check-line"><input id="attr-variant" type="checkbox" ${existing?.variant ? 'checked' : ''}/>محور Variant</label>
       <p class="form-error" id="form-error"></p>
       <p class="form-note">${used ? 'این ویژگی در محصول استفاده شده و نوع آن قفل است.' : 'برای گوشی موبایل می‌توانی «حافظه رم» را با نوع عدد و واحد گیگابایت ثبت کنی.'}</p>
@@ -673,6 +690,22 @@ function toast(text, rerender) {
   setTimeout(() => { ui.toast = ''; rerender(); }, 2200);
 }
 
+function syncAttrFilterFields() {
+  const box = document.querySelector('#attr-filter-box');
+  const filterable = document.querySelector('#attr-filterable')?.checked;
+  const type = document.querySelector('#attr-type')?.value;
+  const filterType = document.querySelector('#attr-filter-type');
+  const searchLine = document.querySelector('#attr-search-line');
+  if (box) box.classList.toggle('is-hidden', !filterable);
+  if (filterType) {
+    [...filterType.options].forEach((option) => {
+      option.disabled = option.value === 'range' && type !== 'number';
+    });
+    if (filterType.value === 'range' && type !== 'number') filterType.value = 'multi';
+  }
+  if (searchLine) searchLine.classList.toggle('is-hidden', filterType?.value === 'range');
+}
+
 function fail(message) {
   const node = document.querySelector('#form-error');
   if (node) node.textContent = message;
@@ -681,6 +714,7 @@ function fail(message) {
 export function bindProduct(rerender) {
   const root = document.querySelector('[data-product-root]');
   if (!root) return;
+  syncAttrFilterFields();
   root.addEventListener('click', (event) => onClick(event, rerender), true);
   root.addEventListener('change', (event) => onChange(event, rerender));
   root.addEventListener('input', (event) => {
@@ -720,7 +754,7 @@ function onClick(event, rerender) {
   const brand = event.target.closest('[data-brand]');
   if (brand) { ui.brandId = brand.dataset.brand; rerender(); return; }
   const leaf = event.target.closest('[data-leaf]');
-  if (leaf) { ui.leafId = leaf.dataset.leaf; rerender(); return; }
+  if (leaf) { ui.leafId = leaf.dataset.leaf; bindFilterHost(ui.leafId); rerender(); return; }
   const product = event.target.closest('[data-product]');
   if (product) { ui.productId = product.dataset.product; rerender(); return; }
   const open = event.target.closest('[data-open]');
@@ -733,6 +767,7 @@ function onClick(event, rerender) {
   if (!action) return;
   if (handleInventoryClick(action, actionHost, rerender)) return;
   if (handleShopLayoutClick(action, actionHost, rerender)) return;
+  if (handleFiltersClick(action, actionHost, rerender)) return;
   if (handleSeoClick(action, actionHost, rerender)) {
     if (seoUi.toast) {
       seoUi.toast = false;
@@ -856,6 +891,11 @@ function onChange(event, rerender) {
   const target = event.target;
   if (handleInventoryChange(target, rerender)) return;
   if (handleShopLayoutChange(target, rerender)) return;
+  if (handleFiltersChange(target, rerender)) return;
+  if (target.id === 'attr-filterable' || target.id === 'attr-filter-type' || target.id === 'attr-type') {
+    syncAttrFilterFields();
+    return;
+  }
   if (handleSeoChange(target, rerender)) return;
   if (target.id === 'bulk-leaf' || target.id === 'bulk-csv' || target.id === 'bulk-images') {
     Promise.resolve(handleBulkChange(target, rerender)).then(() => {
@@ -868,7 +908,7 @@ function onChange(event, rerender) {
     return;
   }
   if (target.dataset.field === 'customer') { ui.customerId = target.value; rerender(); return; }
-  if (target.id === 'attr-leaf' || target.id === 'attr-type') return;
+  if (target.id === 'attr-leaf') return;
   if (target.id === 'product-leaf') {
     const brandSelect = document.querySelector('#product-brand');
     const current = brandSelect?.value || '';
@@ -963,10 +1003,16 @@ function saveAttribute(rerender) {
     : [];
   const required = !!document.querySelector('#attr-required')?.checked;
   const filterable = !!document.querySelector('#attr-filterable')?.checked;
+  const filterTitle = filterable ? (document.querySelector('#attr-filter-title')?.value.trim() || label) : '';
+  const filterType = filterable ? (document.querySelector('#attr-filter-type')?.value || 'multi') : '';
+  const filterSearch = filterable && filterType !== 'range' && !!document.querySelector('#attr-filter-search')?.checked;
   const variant = !!document.querySelector('#attr-variant')?.checked;
   if (!label) return fail('نام ویژگی لازم است.');
   if (['single', 'multi'].includes(dataType) && !options.length) return fail('برای ویژگی انتخابی حداقل یک مقدار مجاز لازم است.');
   if (variant && !['single', 'multi'].includes(dataType)) return fail('محور Variant فقط برای ویژگی انتخابی مجاز است.');
+  if (filterable && !filterTitle) return fail('برای فیلتر، عنوان فیلتر لازم است.');
+  if (filterable && !['radio', 'multi', 'range'].includes(filterType)) return fail('نوع فیلتر باید Radio، Multi Select یا Range باشد.');
+  if (filterType === 'range' && dataType !== 'number') return fail('Range فقط برای ویژگی عدد است.');
   const schema = catalog.schemas[leafId] || (catalog.schemas[leafId] = []);
   if (schema.some((field) => field.key !== ui.editingAttr && normalize(field.label) === normalize(label))) return fail('ویژگی با این نام در همین LeafCat وجود دارد.');
   if (variant && schema.filter((field) => field.variant && field.key !== ui.editingAttr).length >= 2) return fail('هر LeafCat حداکثر دو محور Variant دارد.');
@@ -984,13 +1030,14 @@ function saveAttribute(rerender) {
     const field = schema.find((item) => item.key === ui.editingAttr);
     if (!field) return fail('ویژگی پیدا نشد.');
     if (attributeInUse(leafId, field.key) && field.dataType !== dataType) return fail('نوع ویژگی استفاده‌شده قابل تغییر نیست.');
-    Object.assign(field, { label, dataType, unit, options, required, filterable, variant });
+    Object.assign(field, { label, dataType, unit, options, required, filterable, filterTitle, filterType, filterSearch, variant });
     logChange(`ویرایش ویژگی ${label}`);
   } else {
-    schema.push({ key: `attr-${Date.now().toString(36)}`, label, dataType, unit, options, required, filterable, variant, active: true });
+    schema.push({ key: `attr-${Date.now().toString(36)}`, label, dataType, unit, options, required, filterable, filterTitle, filterType, filterSearch, variant, active: true });
     logChange(`تعریف ویژگی ${label}`);
   }
   ui.leafId = leafId;
+  syncFilterPanel(leafId);
   persistCatalog();
   ui.modal = null;
   toast('ویژگی ذخیره شد', rerender);

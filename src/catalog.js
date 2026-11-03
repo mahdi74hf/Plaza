@@ -22,6 +22,21 @@ export const PRICE_BUCKETS = [
   { id: 'gt100', label: 'بیش از ۱۰۰ میلیون', min: 100_000_000, max: Infinity },
 ];
 
+export const DEFAULT_WARRANTY = 'سلامت و اصالت فیزیکی';
+export const COLOR_PALETTE = ['بی‌رنگ', 'مشکی', 'سفید', 'آبی', 'نقره‌ای', 'طلایی', 'سبز'];
+export const FILTER_TYPES = [
+  { id: 'radio', label: 'Radio Button' },
+  { id: 'multi', label: 'Multi Select' },
+  { id: 'range', label: 'Range' },
+];
+export const BUILTIN_FILTERS = [
+  { id: 'brand', kind: 'brand', label: 'برند', type: 'multi', search: true, defaultVisible: true, defaultCollapsed: false },
+  { id: 'price', kind: 'price', label: 'قیمت', type: 'range', search: false, defaultVisible: true, defaultCollapsed: false },
+  { id: 'availability', kind: 'availability', label: 'موجودی', type: 'radio', search: false, defaultVisible: true, defaultCollapsed: true },
+  { id: 'color', kind: 'color', label: 'رنگ', type: 'multi', search: true, defaultVisible: true, defaultCollapsed: false },
+  { id: 'warranty', kind: 'warranty', label: 'گارانتی', type: 'multi', search: true, defaultVisible: true, defaultCollapsed: true },
+];
+
 export const SORTS = [
   { id: 'bestseller', label: 'پرفروش‌ترین' },
   { id: 'newest', label: 'جدیدترین' },
@@ -45,7 +60,12 @@ const library = {
 };
 
 function attr(key, extra) {
-  return { ...library[key], dataType: 'single', unit: '', filterable: true, variant: false, required: false, active: true, ...extra };
+  const base = { ...library[key], dataType: 'single', unit: '', filterable: false, variant: false, required: false, active: true, filterTitle: '', filterType: '', filterSearch: false, ...extra };
+  if (base.filterable) {
+    base.filterTitle = base.filterTitle || base.label;
+    base.filterType = base.filterType || (base.dataType === 'number' ? 'range' : 'multi');
+  }
+  return base;
 }
 
 function sku(code, combo, price, stock, extra = {}) {
@@ -78,23 +98,25 @@ function seed() {
     ],
     schemas: {
       phone: [
-        attr('color', { variant: true, required: true }),
-        attr('storage', { variant: true, required: true }),
+        attr('color', { variant: true, required: true, filterable: false }),
+        attr('storage', { variant: true, required: true, filterable: true, filterTitle: 'حافظه', filterType: 'multi', filterSearch: true }),
+        { key: 'weight', label: 'وزن', dataType: 'number', unit: 'گرم', options: [], required: false, active: true, variant: false, filterable: true, filterTitle: 'وزن', filterType: 'range', filterSearch: false },
       ],
       tablet: [
-        attr('storage', { variant: true, required: true }),
-        attr('screen', { variant: true, required: true }),
+        attr('storage', { variant: true, required: true, filterable: true, filterTitle: 'ظرفیت', filterType: 'multi', filterSearch: false }),
+        attr('screen', { variant: true, required: true, filterable: true, filterTitle: 'اندازه صفحه', filterType: 'radio', filterSearch: false }),
       ],
       laptop: [
-        attr('ram', { variant: true, required: true }),
-        attr('storage', { variant: true, required: true }),
+        attr('ram', { variant: true, required: true, filterable: true, filterTitle: 'رم', filterType: 'multi', filterSearch: false }),
+        attr('storage', { variant: true, required: true, filterable: true, filterTitle: 'حافظه', filterType: 'multi', filterSearch: true }),
       ],
-      router: [attr('connection', { variant: false, required: false, filterable: true })],
+      router: [attr('connection', { variant: false, required: false, filterable: true, filterTitle: 'اتصال', filterType: 'radio', filterSearch: false })],
       'electric-heater': [],
       'gas-heater': [],
     },
     products: [
       product('iphone', 'گوشی اپل آیفون ۱۶ پرو', 'Apple iPhone 16 Pro', 'A3293', 'phone', 'apple', 'published', '2026-08-02', 480, {
+        attributes: { weight: 199 },
         tags: ['new', 'online'],
         aiCrossSell: [
           { id: 'ai-iphone-1', productId: 'ipad', score: 0.86, model: 'plaza-demo-v1', status: 'pending', note: '' },
@@ -110,9 +132,11 @@ function seed() {
         ],
       }),
       product('galaxy', 'گوشی سامسونگ گلکسی S25', 'Samsung Galaxy S25', 'SM-S931', 'phone', 'samsung', 'published', '2026-07-18', 360, {
+        attributes: { weight: 167 },
         skus: [sku('PLAZA-GALAXY-BLK-256', { color: 'مشکی', storage: '۲۵۶ گیگابایت' }, 42_500_000, 8, { compareAt: 47_000_000 })],
       }),
       product('redmi', 'گوشی شیائومی ردمی نوت ۱۴', 'Xiaomi Redmi Note 14', 'Note14', 'phone', 'xiaomi', 'published', '2026-06-11', 220, {
+        attributes: { weight: 190 },
         skus: [sku('PLAZA-REDMI-BLU-128', { color: 'آبی', storage: '۱۲۸ گیگابایت' }, 14_900_000, 12)],
       }),
       product('ipad', 'تبلت اپل آیپد ایر', 'Apple iPad Air', 'A2898', 'tablet', 'apple', 'published', '2026-05-20', 90, {
@@ -143,6 +167,7 @@ function seed() {
     cart: [],
     audit: [],
     searches: [],
+    filterPanels: {},
     marketingTags: [
       { id: 'new', label: 'جدید' },
       { id: 'sale', label: 'حراج' },
@@ -181,6 +206,18 @@ function normalizeField(field) {
   field.unit = field.unit || '';
   field.options = field.options || [];
   if (field.active === undefined) field.active = true;
+  if (field.filterable) {
+    field.filterTitle = field.filterTitle || field.label || '';
+    if (!['radio', 'multi', 'range'].includes(field.filterType)) {
+      field.filterType = field.dataType === 'number' ? 'range' : field.dataType === 'single' ? 'radio' : 'multi';
+    }
+    if (field.filterType === 'range' && field.dataType !== 'number') field.filterType = 'multi';
+    field.filterSearch = field.filterType === 'range' ? false : !!field.filterSearch;
+  } else {
+    field.filterTitle = field.filterTitle || '';
+    field.filterType = field.filterType || '';
+    field.filterSearch = false;
+  }
   return field;
 }
 
@@ -189,6 +226,7 @@ function readCatalog() {
     const saved = localStorage.getItem(CATALOG_KEY);
     const data = saved ? JSON.parse(saved) : seed();
     ensureShopDemoCatalog(data);
+    ensureFilterDemoCatalog(data);
     if (!data.marketingTags?.length) data.marketingTags = seed().marketingTags;
     data.products?.forEach((item) => {
       if (!item.tags) item.tags = [];
@@ -199,14 +237,51 @@ function readCatalog() {
       ensureProductSeo(item);
     });
     if (!Array.isArray(data.redirects)) data.redirects = seedRedirects();
+    if (!data.filterPanels || typeof data.filterPanels !== 'object') data.filterPanels = {};
     migrateLegacyRedirects(data);
     Object.values(data.schemas || {}).forEach((fields) => fields.forEach(normalizeField));
+    Object.keys(data.schemas || {}).forEach((leafId) => ensureFilterPanelOn(data, leafId));
     return data;
   } catch {
     const data = seed();
     data.products?.forEach(ensureProductSeo);
     data.redirects = seedRedirects();
     return data;
+  }
+}
+
+function ensureFilterDemoCatalog(data) {
+  data.schemas ||= {};
+  data.schemas.phone ||= [];
+  if (!data.schemas.phone.some((field) => field.key === 'weight')) {
+    data.schemas.phone.push({
+      key: 'weight',
+      label: 'وزن',
+      dataType: 'number',
+      unit: 'گرم',
+      options: [],
+      required: false,
+      active: true,
+      variant: false,
+      filterable: true,
+      filterTitle: 'وزن',
+      filterType: 'range',
+      filterSearch: false,
+    });
+  }
+  const storage = data.schemas.phone.find((field) => field.key === 'storage');
+  if (storage && storage.filterable !== false) {
+    storage.filterable = true;
+    storage.filterTitle = storage.filterTitle || 'حافظه';
+    storage.filterType = storage.filterType || 'multi';
+    storage.filterSearch = storage.filterSearch !== false;
+  }
+  const weights = { iphone: 199, galaxy: 167, redmi: 190 };
+  for (const [id, weight] of Object.entries(weights)) {
+    const item = data.products.find((entry) => entry.id === id);
+    if (item && (item.attributes?.weight === undefined || item.attributes?.weight === '')) {
+      item.attributes = { ...(item.attributes || {}), weight };
+    }
   }
 }
 
@@ -297,6 +372,169 @@ export function sellable(item) {
 
 export function schemaOf(leafId) {
   return catalog.schemas[leafId] || [];
+}
+
+export function attrFilterId(key) {
+  return `attr:${key}`;
+}
+
+export function filterTypeLabel(type) {
+  return FILTER_TYPES.find((item) => item.id === type)?.label || type || '—';
+}
+
+function builtinById(id) {
+  return BUILTIN_FILTERS.find((item) => item.id === id) || null;
+}
+
+export function availableFilterSources(leafId) {
+  const attrs = schemaOf(leafId)
+    .filter((field) => field.active && field.filterable && field.key !== 'color')
+    .map((field) => ({
+      id: attrFilterId(field.key),
+      kind: 'attr',
+      key: field.key,
+      label: field.filterTitle || field.label,
+      type: field.filterType || (field.dataType === 'number' ? 'range' : 'multi'),
+      search: !!field.filterSearch,
+      defaultVisible: true,
+      defaultCollapsed: false,
+      field,
+    }));
+  return [...BUILTIN_FILTERS, ...attrs];
+}
+
+function blankPanelItem(source, order) {
+  return {
+    id: source.id,
+    visible: source.defaultVisible !== false,
+    order,
+    title: '',
+    collapsed: !!source.defaultCollapsed,
+    buckets: source.type === 'range' ? [] : [],
+  };
+}
+
+function ensureFilterPanelOn(data, leafId) {
+  data.filterPanels ||= {};
+  const sources = (data === catalog ? availableFilterSources(leafId) : (
+    [...BUILTIN_FILTERS, ...(data.schemas?.[leafId] || [])
+      .filter((field) => field.active && field.filterable && field.key !== 'color')
+      .map((field) => ({
+        id: attrFilterId(field.key),
+        type: field.filterType || (field.dataType === 'number' ? 'range' : 'multi'),
+        defaultVisible: true,
+        defaultCollapsed: false,
+      }))]
+  ));
+  const prev = data.filterPanels[leafId]?.items || [];
+  const byId = new Map(prev.map((item) => [item.id, item]));
+  const items = sources.map((source, index) => {
+    const old = byId.get(source.id);
+    return {
+      id: source.id,
+      visible: old?.visible ?? source.defaultVisible !== false,
+      order: old?.order ?? index,
+      title: old?.title || '',
+      collapsed: old?.collapsed ?? !!source.defaultCollapsed,
+      buckets: Array.isArray(old?.buckets) ? old.buckets : [],
+    };
+  });
+  items.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  items.forEach((item, index) => { item.order = index; });
+  data.filterPanels[leafId] = { items };
+  return data.filterPanels[leafId];
+}
+
+export function ensureFilterPanel(leafId) {
+  return ensureFilterPanelOn(catalog, leafId);
+}
+
+export function filterPanelOf(leafId) {
+  return ensureFilterPanel(leafId);
+}
+
+export function filterSourceMeta(leafId, id) {
+  return availableFilterSources(leafId).find((item) => item.id === id) || builtinById(id);
+}
+
+export function filterDisplayTitle(leafId, item) {
+  if (item.title?.trim()) return item.title.trim();
+  return filterSourceMeta(leafId, item.id)?.label || item.id;
+}
+
+export function visibleFilterItems(leafId) {
+  return filterPanelOf(leafId).items
+    .filter((item) => item.visible)
+    .sort((a, b) => a.order - b.order);
+}
+
+export function priceBucketsFor(leafId) {
+  const custom = filterPanelOf(leafId).items.find((item) => item.id === 'price')?.buckets || [];
+  return custom.length ? custom : PRICE_BUCKETS;
+}
+
+export function rangeBucketsFor(leafId, filterId) {
+  return filterPanelOf(leafId).items.find((item) => item.id === filterId)?.buckets || [];
+}
+
+export function syncFilterPanel(leafId) {
+  ensureFilterPanel(leafId);
+}
+
+export function moveFilterItem(leafId, id, delta) {
+  const panel = ensureFilterPanel(leafId);
+  const index = panel.items.findIndex((item) => item.id === id);
+  const next = index + delta;
+  if (index < 0 || next < 0 || next >= panel.items.length) return false;
+  const [row] = panel.items.splice(index, 1);
+  panel.items.splice(next, 0, row);
+  panel.items.forEach((item, order) => { item.order = order; });
+  return true;
+}
+
+export function facetValues(products, sourceId, leafId) {
+  const values = new Set();
+  if (sourceId === 'brand') {
+    products.forEach((item) => { if (item.brandId) values.add(item.brandId); });
+    return [...values];
+  }
+  if (sourceId === 'color') {
+    products.forEach((item) => item.skus.forEach((sku) => {
+      if (sku.combo?.color) values.add(sku.combo.color);
+    }));
+    if (!values.size) COLOR_PALETTE.forEach((color) => values.add(color));
+    return [...values];
+  }
+  if (sourceId === 'warranty') {
+    products.forEach((item) => item.skus.forEach((sku) => values.add(sku.warranty || DEFAULT_WARRANTY)));
+    if (!values.size) values.add(DEFAULT_WARRANTY);
+    return [...values];
+  }
+  if (sourceId.startsWith('attr:')) {
+    const key = sourceId.slice(5);
+    products.forEach((item) => {
+      const current = item.attributes?.[key];
+      if (Array.isArray(current)) current.forEach((value) => value && values.add(String(value)));
+      else if (current !== undefined && current !== null && current !== '') values.add(String(current));
+      item.skus.forEach((sku) => { if (sku.combo?.[key]) values.add(String(sku.combo[key])); });
+    });
+    const field = leafId ? schemaOf(leafId).find((entry) => entry.key === key) : null;
+    (field?.options || []).forEach((option) => values.add(option));
+    return [...values];
+  }
+  return [];
+}
+
+function numberOf(value) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const parsed = Number(String(raw ?? '').replace(/[^\d.-]/g, ''));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function inBucket(value, bucket) {
+  if (!bucket || value == null) return false;
+  const max = bucket.max == null || bucket.max === Infinity ? Infinity : Number(bucket.max);
+  return value >= Number(bucket.min || 0) && value < max;
 }
 
 export function variantAxes(leafId) {
@@ -392,6 +630,14 @@ export function passesFilters(item, filters) {
   if (filters.brands?.length) {
     if (!item.brandId || !filters.brands.includes(item.brandId)) return false;
   }
+  if (filters.color?.length) {
+    const matched = item.skus.some((entry) => filters.color.includes(entry.combo?.color) && (!filters.availableOnly || purchasable(entry)));
+    if (!matched) return false;
+  }
+  if (filters.warranty?.length) {
+    const matched = item.skus.some((entry) => filters.warranty.includes(entry.warranty || DEFAULT_WARRANTY) && (!filters.availableOnly || purchasable(entry)));
+    if (!matched) return false;
+  }
   const axes = variantAxes(item.leafId);
   for (const [key, values] of Object.entries(filters.attrs || {})) {
     if (!values?.length) continue;
@@ -402,15 +648,33 @@ export function passesFilters(item, filters) {
     } else {
       const current = item.attributes?.[key];
       const list = Array.isArray(current) ? current : [current];
-      if (!values.some((value) => list.includes(value))) return false;
+      if (!values.some((value) => list.map(String).includes(String(value)))) return false;
+    }
+  }
+  for (const [key, spec] of Object.entries(filters.ranges || {})) {
+    if (!spec || (!spec.bucket && spec.min === '' && spec.max === '' && spec.min !== 0 && spec.max !== 0)) continue;
+    const num = numberOf(item.attributes?.[key]);
+    if (spec.bucket) {
+      const bucket = rangeBucketsFor(item.leafId, attrFilterId(key)).find((entry) => entry.id === spec.bucket);
+      if (!inBucket(num, bucket)) return false;
+    } else {
+      if (num == null) return false;
+      if (spec.min !== '' && spec.min != null && num < Number(spec.min)) return false;
+      if (spec.max !== '' && spec.max != null && num > Number(spec.max)) return false;
     }
   }
   const shown = displaySku(item, filters.attrs);
   if (filters.availableOnly && !item.skus.some((entry) => purchasable(entry) && matchingSkus(item, filters.attrs).includes(entry))) return false;
   if (filters.price) {
-    const bucket = PRICE_BUCKETS.find((entry) => entry.id === filters.price);
+    const bucket = priceBucketsFor(item.leafId).find((entry) => entry.id === filters.price);
     const price = shown?.price;
-    if (!bucket || !price || price < bucket.min || price >= bucket.max) return false;
+    if (!bucket || !price || !inBucket(price, bucket)) return false;
+  }
+  if (filters.priceMin !== '' && filters.priceMin != null) {
+    if (!shown?.price || shown.price < Number(filters.priceMin)) return false;
+  }
+  if (filters.priceMax !== '' && filters.priceMax != null) {
+    if (!shown?.price || shown.price > Number(filters.priceMax)) return false;
   }
   return true;
 }
