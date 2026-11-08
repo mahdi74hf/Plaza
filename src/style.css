@@ -2101,6 +2101,11 @@ svg {
   border: 1px solid var(--ds-border-subtle);
   font-size: var(--ds-text-xs);
 }
+.ux-check-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
 .ux-row-actions {
   display: flex;
   gap: 4px;
